@@ -1,0 +1,7 @@
+@font-face {
+    font-family: 'Kruti';
+    src: url('lang/Kruti/k010.eot');
+    src: local("Hindi"), url("lang/Kruti/k010.TTF") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    }

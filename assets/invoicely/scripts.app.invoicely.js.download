@@ -1,0 +1,3633 @@
+var refreshTrackTimeInterval;
+
+var lineItemCount;
+
+function init() {
+	"use strict";
+	
+	fireTiprPlugin();
+	clearInterval(refreshTrackTimeInterval);
+	
+	/* sometimes autocomplete remained */
+	$('.autocomplete-suggestions').remove();
+	$('.pika-single').remove();
+	
+	/* set environment variables */
+	currentPath = window.location.pathname;
+	currentPage = $('[name="current_page"]').val();
+	currentType = $('[name="current_type"]').val();
+	currentID = $('[name="current_id"]').val();
+	htmlTitle = $('[name="html_title"]').val();
+	currentBusinessName = $('[name="business_name"]').val();
+	currentDateFormat = $('[name="current_date_format"]').val();
+	currentAdditionalParameters = $('[name="current_additional_parameters"]').val();
+	portalName = $('[name="portal_name"]').val();
+		
+	setTimeout( function(){ 
+    $('[name="load_from_datatables_state"]').val('false');
+    }  , 1000 );
+	
+	/* set page title */
+	$('title').text(htmlTitle + ' - ' + currentBusinessName);
+			
+	// mark current sidebar page selected
+	markSidebarSelected(currentPage);
+	
+	// initialize all ad banners 
+	fireAds('eversign_launch_banner');
+				
+	switch (currentPage) {
+	
+		case 'new_invoice':
+		case 'new_recinvoice':
+		case 'new_bill':
+		case 'new_recbill':
+		case 'new_estimate':
+		
+		fireUploadifivePlugin();	
+		fireDatePicker();
+		
+		fireAutocomplete('connection');
+		fireAutocomplete('item');
+		fireAutocomplete('expense');
+		fireAutocomplete('mileage');
+		fireAutocomplete('time');
+		
+		//refreshNumberFormatAndPrecision();
+		fireSortablePlugin();
+		
+		showHideTDS();
+				
+		loadTagsPopover('tags');	
+		loadTagsPopover('taxes');	
+		loadTagsPopover('discounts');	
+		loadTagsPopover('shipping');	
+		
+		// count existing line items for add_line function  
+	    lineItemCount = $('body').find('.one_item_line.actual').length;
+
+		break;
+		
+		case 'edit_invoice':
+		case 'edit_recinvoice':
+		case 'edit_bill':
+		case 'edit_recbill':
+		case 'edit_estimate':
+				
+		fireUploadifivePlugin();	
+		fireDatePicker();
+		
+		fireAutocomplete('connection');
+		fireAutocomplete('item');
+		fireAutocomplete('expense');
+		fireAutocomplete('mileage');
+		fireAutocomplete('time');
+		
+		//refreshNumberFormatAndPrecision();
+		fireSortablePlugin();
+		
+		showHideTDS();
+				
+		loadTagsPopover('tags');	
+		loadTagsPopover('taxes');	
+		loadTagsPopover('discounts');	
+		loadTagsPopover('shipping');	
+		
+		// count existing line items for add_line function  
+	    lineItemCount = $('body').find('.one_item_line.actual').length;
+		
+		break;
+		
+		case 'invoices':
+		case 'recinvoices':
+		case 'bills':
+		case 'recbills':
+		case 'estimates':
+		case 'connections':
+		case 'items':
+		case 'tasks':
+		case 'expenses':
+		case 'trips':
+		case 'team':
+		case 'tags':
+		case 'trash':
+		case 'expense_entries':
+		case 'mileage_entries':
+		case 'invoice_activity':
+		case 'recinvoice_activity':
+		case 'bill_activity':
+		case 'recbill_activity':
+		case 'estimate_activity':
+		case 'invoice_payments':
+		case 'bill_payments':
+		case 'invoice_comments':
+		case 'bill_comments':
+		case 'estimate_comments':
+		
+		// do these two pages exist? 
+		case 'invoice_recurring_invoices':
+		case 'bill_recurring_bills':
+		
+		case 'recinvoice_invoices':
+		case 'recbill_bills':
+		case 'connection_invoices':
+		case 'connection_recinvoices':
+		case 'connection_bills':
+		case 'connection_recbills':
+		case 'connection_estimates':
+		case 'connection_contacts':
+				
+		fireDataTables();
+
+		break;
+		
+		case 'time_entries':
+		
+		fireDataTables();
+		
+		/* refresh active time tracker amounts every 30000 ms = 30 seconds */
+		refreshTrackTimeInterval = window.setInterval(function() {
+			refreshTrackTime();
+    	}, 30000);
+		
+		
+		break;
+		
+		case 'dashboard':
+		
+		fireDatePicker();
+		
+		var selectedGraph;
+		var graphDisplayName;
+		var graphPeriodFrom;
+		var graphPeriodTo;
+		var graphPeriodFromFormatted;
+		var graphPeriodToFormatted;
+		var selectedPeriodValue;
+		
+		/* load graph settings from cookie */
+		var storedGraphSettings = $.parseJSON(localStorage.getItem(portalName+'_graph_settings'));
+		
+		//console.log(storedGraphSettings);
+				
+		if (storedGraphSettings) {
+		selectedGraph = storedGraphSettings.graphType;
+		graphDisplayName = storedGraphSettings.graphDisplayName;
+		
+		selectedPeriodValue = storedGraphSettings.graphSelectedPeriod;
+		
+			if (storedGraphSettings.graphSelectedPeriod === 'custom') {
+			graphPeriodFrom = storedGraphSettings.graphCustomPeriodFrom;	
+			graphPeriodTo = storedGraphSettings.graphCustomPeriodTo;	
+			graphPeriodFromFormatted = storedGraphSettings.graphCustomPeriodFromFormatted;
+			graphPeriodToFormatted = storedGraphSettings.graphCustomPeriodToFormatted;
+			} else {
+			graphPeriodFrom = $('[name="period"] option[value="'+storedGraphSettings.graphSelectedPeriod+'"]').attr('data-period-start');	
+			graphPeriodTo = $('[name="period"] option[value="'+storedGraphSettings.graphSelectedPeriod+'"]').attr('data-period-end');	
+			graphPeriodFromFormatted = $('[name="period"] option[value="'+storedGraphSettings.graphSelectedPeriod+'"]').attr('data-period-start-formatted');	
+			graphPeriodToFormatted = $('[name="period"] option[value="'+storedGraphSettings.graphSelectedPeriod+'"]').attr('data-period-end-formatted');	
+			}
+		
+		} else {
+		selectedGraph = 'invoiced_received';
+		graphDisplayName = 'Invoiced / Received';
+		selectedPeriodValue = 3;
+		graphPeriodFrom = $('[name="period"] option[value="3"]').attr('data-period-start');
+		graphPeriodTo = $('[name="period"] option[value="3"]').attr('data-period-end');
+		graphPeriodFromFormatted = $('[name="period"] option[value="3"]').attr('data-period-start-formatted');
+		graphPeriodToFormatted = $('[name="period"] option[value="3"]').attr('data-period-end-formatted');
+		}
+		
+		// load selected info into chart container 
+		$('[data-chart-box-heading="true"]').html(graphDisplayName + ' ('+graphPeriodFromFormatted+' - '+graphPeriodToFormatted+')');
+		$('select[name="report_type"] option[value="'+selectedGraph+'"]').prop('selected', true);
+		$('[name="period"] option[value="'+selectedPeriodValue+'"]').prop('selected', true);
+		
+		mainHighchart(selectedGraph, graphPeriodFrom, graphPeriodTo);
+
+		secondaryPieChart($('[name="invoice_summary[received]"]').val(), $('[name="invoice_summary[outstanding]"]').val());
+		
+		/* parse string to array */
+		dashboardComparisonChart($('[name="income_expenditure[income]"]').val().split(',').map(Number), $('[name="income_expenditure[expenditure]"]').val().split(',').map(Number));
+		
+		break;
+						
+		case 'view_public_invoice':
+		case 'view_public_recinvoice':
+		case 'view_public_bill':
+		case 'view_public_recbill':
+		case 'view_public_estimate':
+		case 'view_public_account_statement':
+		
+		//fireDatePicker();
+		
+		break;
+		
+		case 'view_account_statement':
+		
+		fireDatePicker();
+		
+		break;
+		
+		case 'colors':
+		
+		// not working
+        //jscolor.init();
+		
+		break;
+				
+		case 'files':
+		fireDataTables();
+		fireUploadifivePlugin();	
+		break;
+		
+		case 'graphics':
+		fireUploadifivePlugin();	
+		break;
+		
+		case 'reports':
+		fireDatePicker();
+		fireAutocomplete('connection');
+		break;
+				
+	}
+	
+}
+
+
+/* GENERATE REPORTS */
+$('body').on('submit', '[data-action="generate_report"]', function(event) {
+	event.preventDefault();
+	
+	var redirectParams;
+	var redirectPath;
+	
+	$('button[form="generate_report"]').addClass('loading');
+	
+	var reportType = $(this).find('[name="report[type]"]').val();
+	var reportPeriod = $(this).find('.form_row.custom_period').is(':visible') ? 'custom' : $(this).find('[name="report[period]"]').val();
+	var reportPeriodFrom = $(this).find('[name="report[period_from]"]').attr('data-real-date');
+	var reportPeriodTo = $(this).find('[name="report[period_to]"]').attr('data-real-date');
+	var reportStatementStatus = $(this).find('[name="report[statement_status]"]').val();
+	var reportCurrency = $(this).find('[name="report[currency]"]').val();
+	var reportClientType = $(this).find('[name="report[client_type]"]').val();
+	var reportSingleClient = $(this).find('[name="client_id"]').val();
+	
+	redirectParams = '&report_type='+reportType;
+	redirectPath = '/reports/'+reportType;
+	
+	if (reportPeriod === 'custom') {
+	redirectParams += '&report_period=custom&report_period_from='+reportPeriodFrom+'&report_period_to='+reportPeriodTo;
+	redirectPath += '/'+reportPeriodFrom+'/'+reportPeriodTo;
+	} else {
+	redirectParams += '&report_period='+reportPeriod;
+	redirectPath += '/'+reportPeriod;
+	}
+	
+	if (reportCurrency === 'all_currencies') {
+	redirectParams += '&report_currency=all_currencies';
+	redirectPath += '/all_currencies';
+	} else {
+	redirectParams += '&report_currency='+reportCurrency;
+	redirectPath += '/'+(reportCurrency.toUpperCase());
+	}
+	
+	if (reportStatementStatus === 'all_statuses') {
+	redirectParams += '&report_statement_status=all_statuses';
+	redirectPath += '/all_statuses';
+	} else {
+	redirectParams += '&report_statement_status='+reportStatementStatus;
+	redirectPath += '/'+reportStatementStatus;
+	}
+		
+	if (reportClientType === 'custom' && reportSingleClient) {
+	redirectParams += '&report_client_type=single_client&report_client_id='+reportSingleClient;
+	redirectPath += '/'+reportSingleClient;
+	} else {
+	redirectParams += '&report_client_type=all_connections';
+	redirectPath += '/all_connections';
+	}
+	
+	//alert('path: '+redirectPath+'<br> Params: '+redirectParams);
+	
+	goToPage(redirectPath, 'reports', 'reports', null, null, false, null, redirectParams);
+	return false;
+
+});
+
+
+/* CHANGE REPORT TYPE */
+$('body').on('change', '[name="report[type]"]', function() {
+	
+	var reportType = $(this).val();
+	
+	$('.form_row').not('[data-action-target="on-select-custom"]').css('display', 'inline-block');
+	$('.line_breaks').show();
+		
+	switch (reportType) {
+	
+		case 'payments':
+		$('.status_selector').hide();
+		break;
+		
+		case 'invoices':
+		$('[data-report-type]').hide();
+		$('[data-report-type="invoices"]').show();
+		break;
+		
+		case 'bills':
+		$('[data-report-type]').hide();
+		$('[data-report-type="bills"]').show();
+		break;
+		
+		case 'estimates':
+		$('[data-report-type]').hide();
+		$('[data-report-type="estimates"]').show();
+		break;
+		
+		case 'ar':
+		$('.currency_selector').hide();
+		$('.period_selector').hide();
+		$('.custom_period').hide();
+		$('.status_selector').hide();
+		$('.client_selector').hide();
+		$('.single_client_selector').hide();
+		$('.line_breaks').hide();
+		break;
+		
+		case 'ap':
+		$('.currency_selector').hide();
+		$('.period_selector').hide();
+		$('.custom_period').hide();
+		$('.status_selector').hide();
+		$('.client_selector').hide();
+		$('.single_client_selector').hide();
+		$('.line_breaks').hide();
+		break;
+		
+		
+	}
+	
+});
+
+
+/* CLIENT SELECTOR */
+$('body').on('change', '[name="client_selector"]', function() {
+		
+	var originalPath;
+	var defaultStatus;
+	
+	switch (currentPage) {
+	
+		case 'invoices':
+		originalPath = '/invoices/list';
+		defaultStatus = $('[name="statement_list_default_tab_invoices"]').val();
+		break;
+		
+		case 'recinvoices':
+		originalPath = '/invoices/recurring/list';
+		defaultStatus = 'all';
+		break;
+		
+		case 'bills':
+		originalPath = '/bills/list';
+		defaultStatus = $('[name="statement_list_default_tab_bills"]').val();
+		break;
+		
+		case 'recbills':
+		originalPath = '/bills/recurring/list';
+		defaultStatus = 'all';
+		break;
+		
+		case 'estimates':
+		originalPath = '/estimates/list';
+		defaultStatus = $('[name="statement_list_default_tab_estimates"]').val();
+		break;
+		
+		case 'time_entries':
+		originalPath = '/track/time';
+		defaultStatus = 'unbilled';
+		break;
+		
+		case 'expense_entries':
+		originalPath = '/track/expenses';
+		defaultStatus = 'unbilled';
+		break;
+		
+		case 'mileage_entries':
+		originalPath = '/track/mileage';
+		defaultStatus = 'unbilled';
+		break;
+		
+	}
+	
+	var status = $('[name="additional_parameter[status]"]').val();
+	
+	if (!status) {
+	status = defaultStatus;
+	}
+	
+	var targetPath = originalPath+'/'+status;
+	var targetAdditionalParams = '&status='+status;
+	
+	if ($(this).val() !== 'all_clients') {
+	targetPath += '/client:'+$(this).val();
+	targetAdditionalParams += '&custom=client:'+$(this).val();
+	}
+	
+	goToPage(targetPath, currentFile, currentPage, currentType, currentID, false, null, targetAdditionalParams);	
+
+});
+
+
+/* CHECK IF STATEMENT PAGE */
+function isPrivateStatementPage(currentPage) {
+	"use strict";
+	
+	// add view_invoice, edit_invoice pages etc ... 
+	if (currentPage === 'new_invoice' || currentPage === 'new_recinvoice' || currentPage === 'new_bill' || currentPage === 'new_recbill' || currentPage === 'new_estimate' || currentPage === 'edit_invoice' || currentPage === 'edit_recinvoice' || currentPage === 'edit_bill' || currentPage === 'edit_recbill' || currentPage === 'edit_estimate') {
+	return true;	
+	} else {
+	return false;	
+	}
+	
+}
+
+
+/* CHECK IF PUBLIC STATEMENT PAGE */
+function isPublicStatementPage(currentPage) {
+	"use strict";
+	
+	if (currentPage === 'view_public_invoice' || currentPage === 'view_public_recinvoice' || currentPage === 'view_public_bill' || currentPage === 'view_public_recbill' || currentPage === 'view_public_estimate') {
+	return true;	
+	} else {
+	return false;	
+	}
+	
+}
+
+function refreshStatementConnectionContacts(connectionID) {
+        /* get connection contacts */		
+		$.ajax({
+			type: 'POST',
+			url: '/php/autocomplete_handler.php?action_type=connection_contacts&id='+connectionID,
+            dataType: 'json',
+            success: function(data) {
+											
+				var suggestionsArray = '';
+																												
+				$.each(data, function(number) {
+										
+				if (number == 0) {
+					
+				$('[name="custom_email_to"]').attr('data-empty-on-blur', (data[number].first_name +' '+ data[number].last_name +' <'+data[number].email_address+'>'));
+				$('[name="custom_email_to"]').attr('data-default-fallback', (data[number].first_name +' '+ data[number].last_name +' <'+data[number].email_address+'>'));
+				$('[name="custom_email_to"]').val(data[number].first_name +' '+ data[number].last_name +' <'+data[number].email_address+'>');
+				
+				//$('[name="custom_email_bcc"]').attr('data-empty-on-blur', (data[number].first_name +' '+ data[number].last_name +' <'+data[number].email_address+'>'));
+				
+				$('[name="custom_email_bcc"]').val('');
+				}
+													
+				suggestionsArray += (number === 0 ? '' : ',') + data[number].first_name +' '+ data[number].last_name +' ('+data[number].email_address+')';
+												
+				});
+								
+				$('[name="custom_email_to"]').attr('data-offline-autocomplete-suggestions', suggestionsArray);
+				$('[name="custom_email_bcc"]').attr('data-offline-autocomplete-suggestions', suggestionsArray);
+				
+			}
+						
+		});	
+		
+}
+
+
+/* STATEMENT-PAGE FLIP BOARD */
+$('body').on('click', '.flip', function() {
+	"use strict";
+		 
+	 var pageToFlipTo = $(this).attr('data-flippable');
+	 var connectionID = $(this).closest('form').find('[name="client_id"]').val();
+	 
+	 if (pageToFlipTo === 'statement_settings' && !connectionID) {
+	 	scrollToTop(0);
+		generalInfo('show', 'error', 'Please specify a client/vendor first.');	
+		return false; 
+	 } else {
+		generalInfo('hide');			
+	 }
+	 
+	 var statementType = $('form[data-form-type="statement"]').attr('data-statement-type');
+	 
+	 $('.flippable').toggleClass('flipped');
+	 
+	 if (isPrivateStatementPage(currentPage)) {
+		
+		if ($('[data-flip-text-target="true"]').hasClass('is_dropdown')) {
+	 	$('[data-flip-text-target="true"]').closest('a').toggleClass('flip');
+		$('[data-flip-text-target="true"]').closest('a').toggleClass('dropdown-toggle');
+		} else {
+	 	$('[data-flip-text-target="true"]').toggleClass('flip');
+		}
+		
+	 	$('[data-flip-text-target="true"]').toggleText('Continue', $('[data-flip-text-target="true"]').attr('data-original-button-text'));
+	 }
+	 
+	 if (isPublicStatementPage(currentPage)) {
+	 	$('.back_button.secondary').toggle();
+	 	$('.main_button').toggle();
+	 }
+	 
+	 $('.back_button.secondary').toggleClass('flip');
+	 $('.back_button.secondary').toggleText('Back to ' + ucFirst(statementType), $('.back_button.secondary').attr('data-back-to-title'));
+	 
+	 scrollToTop(250);
+	 
+	 if ($('.flippable').hasClass('flipped')) {
+		 
+	 	$('button[form="'+currentPage+'"]').attr('data-prevent-default', 'true');
+	 
+	 	$('.back_button.secondary').attr('data-prevent-default', 'true');
+		$('.back_button.secondary').attr('data-ajax', 'false');
+	 
+	 } else {
+	 
+	 	$('button[form="'+currentPage+'"]').attr('data-prevent-default', 'false');
+	 
+	 	$('.back_button.secondary').attr('data-prevent-default', 'false');
+		$('.back_button.secondary').attr('data-ajax', 'true');
+	 
+	 }
+	 
+});  
+
+/* NEW: Switch between Individual & Organization */
+$('body').on('change', '[name="connection_type"]', function() {
+    "use strict";
+	var chosenType = $(this).val(); 
+	var translatedType;
+			
+	switch (chosenType) {
+		case '1':
+		translatedType = 'organization';
+	    $(this).closest('form').find('.form_row.organization input').removeAttr('disabled');
+	    $(this).closest('form').find('.form_row.individual input').attr('disabled', 'disabled');
+		break;
+		
+		case '2':
+		translatedType = 'individual';
+	    $(this).closest('form').find('.form_row.individual input').removeAttr('disabled');
+	    $(this).closest('form').find('.form_row.organization input').attr('disabled', 'disabled');
+		break;
+	}
+	
+	$(this).closest('form').attr('data-connection-type', translatedType);
+});
+
+
+/* NEW CLIENT - MORE DETAILS */
+$("body").on("click", '.more_client_details_button', function() {
+    "use strict";
+    $('#more_client_details_container').toggleClass('hidden');
+    $('.more_client_details_button span').toggleText('Show less', 'Show more');
+
+});
+
+
+/* SUBMIT EDIT TAX DISCOUNT SHIPPING PAGE */
+$('body').on('submit', '[name="create_edit_tds"]', function(event) {
+	"use strict";
+	
+	/* TODO: use ajax and move to submitForm() */
+	
+	/* TODO: error & validation handling */
+	
+	var count = 0;
+	
+	$(this).find('.custom_field_container').each(function () {
+	
+	var currentCount = count ++;
+	
+	$(this).attr('data-count', currentCount);
+		
+	var fieldName = $(this).find('[name="tds_name"]').val();
+	var fieldValue = $(this).find('[name="tds_rate"]').val();
+	
+	var setDefault = $(this).find('[name="tds_is_default"]').prop('checked') === true ? 1 : 0;
+	
+	$(this).find('[name="tds_name"]').attr('name', 'tds['+currentCount+'][name]');
+	$(this).find('[name="tds_name"]').val(fieldName);
+	
+	$(this).find('[name="tds_rate"]').attr('name', 'tds['+currentCount+'][value]');
+	$(this).find('[name="tds_rate"]').val(fieldValue);
+	
+	$(this).find('[name="tds_is_default"]').attr('name', 'tds['+currentCount+'][tds_is_default]');
+	$(this).find('[name="tds_is_default"]').val(setDefault);
+	
+	});
+	
+});
+
+
+/* ACCOUNT STATEMENT PERIOD CHANGE */
+$('body').on('submit', '[name="account_statement_period"]', function(event) {
+	"use strict";
+	event.preventDefault();
+					
+	var originalPath = '/connections/'+currentID+'/account_statement';
+							
+	var period = $(this).find('[name="account_satement_period"]').val();
+	
+	var customPeriodFrom = $(this).find('[name="account_satement_period[from]"]').attr('data-real-date');
+	var customPeriodTo = $(this).find('[name="account_satement_period[to]"]').attr('data-real-date');
+		
+	var redirectParams;
+	
+	if (!validateFormFields($(this))) {
+	return false;	
+	}
+	
+	var redirectPath;
+	
+	if (period === 'custom') {
+	redirectParams = '&period=custom&start_date='+customPeriodFrom+'&end_date='+customPeriodTo;
+	redirectPath = '/'+customPeriodFrom+'/'+customPeriodTo;
+	} else {
+	redirectParams = '&period='+period;
+	redirectPath = '/'+period;
+	}
+		
+	goToPage(originalPath + redirectPath, currentFile, currentPage, currentType, currentID, true, null, redirectParams);	
+				
+});
+
+/* ADJUST CUSTOM FIELD VALUES AND NAMES */
+function adjustCustomFields(formContainer) {
+	"use strict";
+	
+	$(formContainer).find('.custom_field_container').each(function () {
+		
+	var fieldName = $(this).find('[name="custom_field_key"]').val();
+	var fieldValue = $(this).find('[name="custom_field_value"]').val();
+	
+	// disregard 1st input (key) and set name of 2nd input (value) to value of 1st input
+	$(this).find('[name="custom_field_value"]').attr("name", "custom_fields[" + fieldName + "]");
+	
+	});
+		
+}
+
+/* Add Custom Fields Dynamically */
+$(document).ready(function() {
+    "use strict";
+    var x = 1;
+    $("body").on("click", '.add_dynamic_fields', function(e) {
+        e.preventDefault();
+
+		var type = $(this).attr('data-type');
+		
+        x++;
+	
+		if (type === 'custom_fields') {
+		
+        $(".form_row.custom_fields").append('<div class="mt15 custom_field_container"> <input class="double_input first" placeholder="Custom Field Name" type="text" name="custom_field_key"/> <input class="double_input second" placeholder="Custom Field Value" type="text" name="custom_field_value" /> <a href="javascript:void();" onClick="hideDynamicParent($(this), \'div\');" class="remove_custom_field_button">Remove Field</a> </div>');
+		
+		} else if (type === 'taxes_fields') {
+			
+        $(".form_row.custom_fields").append('<div class="mt15 custom_field_container tds"><input class="double_input first" placeholder="Tax Name" type="text" name="tds_name" /> <input class="double_input second" placeholder="Tax Rate" type="text" name="tds_rate" data-input-restriction="percentage" /> <div class="set_default"> <input type="checkbox" name="tds_set_default" id="tds_set_default_'+x+'"> <label for="tds_set_default_'+x+'">Set Default?</label> </div> <a href="javascript:void(0)" onClick="hideDynamicParent($(this), \'div\');" class="remove_custom_field_button">Remove</a> </div>');
+			
+		} else if (type === 'discounts_fields') {
+			
+        $(".form_row.custom_fields").append('<div class="mt15 custom_field_container tds"> <input class="double_input first" placeholder="Discount Name" type="text" name="tds_name"/> <input class="double_input second" placeholder="Discount Rate" type="text" name="tds_rate" data-input-restriction="percentage" /> <div class="set_default"> <input type="checkbox" name="tds_set_default" id="tds_set_default_'+x+'"> <label for="tds_set_default_'+x+'">Set Default?</label> </div> <a href="javascript:void(0)" onClick="hideDynamicParent($(this), \'div\');" class="remove_custom_field_button">Remove</a> </div>');
+			
+		} else if (type === 'shipping_fields') {
+			
+        $(".form_row.custom_fields").append('<div class="mt15 custom_field_container tds"> <input class="double_input first" placeholder="Shipping Name" type="text" name="tds_name"/> <input class="double_input second" placeholder="Shipping Rate" type="text" name="tds_rate" data-input-restriction="number" /> <div class="set_default"> <input type="checkbox" name="tds_set_default" id="tds_set_default_'+x+'"> <label for="tds_set_default_'+x+'">Set Default?</label> </div> <a href="javascript:void(0)" onClick="hideDynamicParent($(this), \'div\');" class="remove_custom_field_button">Remove</a> </div>');
+			
+		}
+		
+    });
+});
+
+
+/* ITEM LINES - ADD ITEM, EXPENSE, MILEAGE or TIME */
+$(document).ready(function() {
+    "use strict";
+		
+	$('body').on('click', '[data-action="add_line"]', function(e) {
+        e.preventDefault();
+				
+        lineItemCount ++;
+				
+		/* probably no longer necessary */
+		if (lineItemCount == 1) {
+		lineItemCount = 2;	
+		}
+		/* probably no longer necessary */
+				
+		var lineType = $(this).attr('data-action-type');
+		var appendContent;
+		
+		var lineTypeName;
+		
+		var includeQuantity;
+		var quantityInputPlaceholder;
+		var quantityInputRestriction;
+		
+		var includeRate;
+		var rateInputPlaceholder;
+		var includeUnit;
+		
+		var amountEditable;
+		
+		switch (lineType) {
+		
+			case 'item':
+			lineTypeName = 'item';
+			includeQuantity = true;
+			quantityInputPlaceholder = 'Quantity';
+			quantityInputRestriction = 'number';
+			includeRate = true;
+			rateInputPlaceholder = 'Unit Price';
+			includeUnit = true;
+			break;
+					
+			case 'expense':
+			lineTypeName = 'expense';
+			amountEditable = true;
+			break;
+					
+			case 'mileage':
+			lineTypeName = 'trip';
+			includeQuantity = true;
+			quantityInputPlaceholder = 'Miles';
+			quantityInputRestriction = 'number';
+			includeRate = true;
+			rateInputPlaceholder = 'Rate';
+			break;
+					
+					
+			case 'time':
+			lineTypeName = 'task';
+			includeQuantity = true;
+			quantityInputPlaceholder = '00:00';
+			quantityInputRestriction = 'time';
+			includeRate = true;
+			rateInputPlaceholder = 'Rate';
+			break;
+					
+		}
+		
+		/* onClick="createDateTags($(this));" */
+
+		appendContent = '<li class="one_item_line actual" data-parent-identifier="one_item_line" data-id="'+lineItemCount+'" data-type="'+lineType+'"> <div class="hidden_item_inputs hidden"> <input type="hidden" name="line_type_'+lineItemCount+'" value="'+lineType+'" /> </div><div class="drag_item"></div><ul class="item_row"> <li class="item_column name_description"> <div class="inner"> <div id="item_textarea_'+lineItemCount+'" class="item_textarea_container"> <textarea data-autocomplete="'+lineType+'" class="item_textarea" name="statement[item_name_description]" placeholder="'+ucFirst(lineTypeName)+' Name &amp; Description"></textarea> <span class="input_loader"></span> <div class="files_area file_upload_'+lineItemCount+'" data-fileupload-id="'+lineItemCount+'"> <div class="tag date" id="date_tag_'+lineItemCount+'" data-tag-type="date"> <a class="close_item" href="javascript:void(0)"></a> <div class="inside"> <span class="filename"></span> </div></div></div></div><div class="textarea_actions left"> <input type="file" name="file_upload_'+lineItemCount+'" id="file_upload_'+lineItemCount+'" data-fileupload-id="'+lineItemCount+'" class="fileupload hidden"/> <label  for="datepicker_item_'+lineItemCount+'" class="attach_button date extra tipr" data-tip="Date" style="z-index: 1000;"></label> <input class="datepicker visibility_hidden_absolute" id="datepicker_item_'+lineItemCount+'" name="date_'+lineItemCount+'" type="text" value=""/> <div class="restrainer"> <a href="javascript:void(0)" class="attach_button extra dropdown-toggle links tipr" data-tip="Link"></a> <ul class="dropdown-menu popover links"> <li> <div class="form_heading"><label for="link_ttd_'+lineItemCount+'">Text To Display</label></div><input type="text" class="link_ttd" name="link_ttd_'+lineItemCount+'" id="link_ttd_'+lineItemCount+'" placeholder="This is a Link"/> </li><li> <div class="form_heading"><label for="link_url_'+lineItemCount+'">Link URL</label></div><input type="text" class="link_url" name="link_url_'+lineItemCount+'" id="link_url_'+lineItemCount+'" value="http://" placeholder="http://example.com"/> <div class="form_row" style="margin-top: 14px;"> <label class="save_button add_link ccfg_button_secondary" data-dropdown="submit">Add Link</label> </div></li></ul> </div> <div class="restrainer"> <a href="javascript:void(0)" class="attach_button extra dropdown-toggle popo tags tipr" data-tip="Tag"></a> <ul class="dropdown-menu popover tags"> <li> <select data-handler-autocomplete="tags" data-create-tag="tag"> </select> <div class="select_arrows"></div></li><li class="gray border"> <a href="javascript:void(0)" class="new_item switch">New Tag</a> <section class="new_tag_item_form hidden"> <input type="text" class="new_tag_item_input" name="new_tag_'+lineItemCount+'" id="new_tag_'+lineItemCount+'" placeholder="Tag Name"/> <div class="form_row"> <input class="remember_tag inline" name="remember_tag_'+lineItemCount+'" id="remember_tag_'+lineItemCount+'" type="checkbox" value="1"> <label for="remember_tag_'+lineItemCount+'" style="margin-left: 3px;">Remember</label> </div><div class="form_row" style="margin-top: 14px;"> <label class="save_button ccfg_button_secondary" data-create-tag="tag" data-dropdown="submit">Add</label> <a href="javascript:void(0)" class="use_existing_tag_item switch">Use Existing</a> </div></section> </li></ul> </div> </div><div class="textarea_actions right"> <div class="restrainer"> <a href="javascript:void(0)" class="attach_button tipr dropdown-toggle popo tax" data-tip="Tax"></a> <ul class="dropdown-menu popover tax"> <li> <select data-handler-autocomplete="taxes" data-create-tag="tax"> </select> <div class="select_arrows"></div></li><li class="gray border"> <a href="javascript:void(0)" class="new_item switch">New Tax</a> <section class="new_tag_item_form hidden"> <input type="text" class="new_tag_item_input" name="new_item_tax_'+lineItemCount+'" id="new_item_tax_'+lineItemCount+'" placeholder="Tax Name"/> <input type="text" class="new_tag_item_rate_input" name="new_item_tax_rate_'+lineItemCount+'" id="new_item_tax_rate_'+lineItemCount+'" data-input-restriction="percentage" placeholder="Rate"/> <div class="form_row"> <input class="remember_tag inline" name="remember_item_tax_'+lineItemCount+'" id="remember_item_tax_'+lineItemCount+'" type="checkbox" value="1"> <label for="remember_item_tax_'+lineItemCount+'" style="margin-left: 3px;">Remember</label> </div><div class="form_row" style="margin-top: 14px;"> <label class="save_button ccfg_button_secondary" data-create-tag="tax" data-dropdown="submit">Add</label> <a href="javascript:void(0)" class="use_existing_tag_item switch">Use Existing</a> </div></section> </li></ul> </div> <div class="restrainer"> <a href="javascript:void(0)" class="attach_button tipr dropdown-toggle popo discount" data-tip="Discount"></a> <ul class="dropdown-menu popover discount"> <li> <select data-handler-autocomplete="discounts" data-create-tag="discount"> </select> <div class="select_arrows"></div></li><li class="gray border"> <a href="javascript:void(0)" class="new_item switch">New Discount</a> <section class="new_tag_item_form hidden"> <input type="text" class="new_tag_item_input" name="new_item_discount_'+lineItemCount+'" id="new_item_discount_'+lineItemCount+'" placeholder="Discount Name"/> <input type="text" class="new_tag_item_rate_input" name="new_item_discount_rate_'+lineItemCount+'" id="new_item_discount_rate_'+lineItemCount+'" data-input-restriction="percentage" placeholder="Rate"/> <div class="form_row"> <input class="remember_tag inline" name="remember_item_discount_'+lineItemCount+'" id="remember_item_discount_'+lineItemCount+'" type="checkbox" value="1"> <label for="remember_item_discount_'+lineItemCount+'" style="margin-left: 3px;">Remember</label> </div><div class="form_row" style="margin-top: 14px;"> <label class="save_button ccfg_button_secondary" data-create-tag="discount" data-dropdown="submit">Add</label> <a href="javascript:void(0)" class="use_existing_tag_item switch">Use Existing</a> </div></section> </li></ul> </div> <div class="restrainer"> <a href="javascript:void(0)" class="attach_button tipr dropdown-toggle popo shipping" data-tip="Shipping"></a> <ul class="dropdown-menu popover shipping"> <li> <select data-handler-autocomplete="shipping" data-create-tag="shipping"> </select> <div class="select_arrows"></div></li><li class="gray border"> <a href="javascript:void(0)" class="new_item switch">New Shipping</a> <section class="new_tag_item_form hidden"> <input type="text" class="new_tag_item_input" name="new_item_shipping_'+lineItemCount+'" id="new_item_shipping_'+lineItemCount+'" placeholder="Shipping Name"/> <input type="text" class="new_tag_item_rate_input" name="new_item_shipping_rate_'+lineItemCount+'" id="new_item_shipping_rate_'+lineItemCount+'" data-input-restriction="number" placeholder="Rate"/> <div class="form_row"> <input class="remember_tag inline" name="remember_item_shipping_'+lineItemCount+'" id="remember_item_shipping_'+lineItemCount+'" type="checkbox" value="1"> <label for="remember_item_shipping_'+lineItemCount+'" style="margin-left: 3px;">Remember</label> </div><div class="form_row" style="margin-top: 14px;"> <label class="save_button ccfg_button_secondary" data-create-tag="shipping" data-dropdown="submit">Add</label> <a href="javascript:void(0)" class="use_existing_tag_item switch">Use Existing</a> </div></section> </li></ul> </div> </div></div></li>';
+		
+		/* quantity */
+		appendContent += '<li class="item_column quantity">';
+		
+		if (includeQuantity === true) {
+			appendContent += '<div class="inner"> <div class="quantity_input"> <input data-validate="required" name="statement[item_quantity]" placeholder="'+quantityInputPlaceholder+'" type="text" data-input-restriction="'+quantityInputRestriction+'" data-trigger="calculation" data-calculation="quantity" value=""> </div></div>';
+		}
+		
+		appendContent += '</li>';
+		/* quantity */
+		
+		/* rate, unit */
+		appendContent += '<li class="item_column unit">';
+		
+		if (includeRate === true) {
+			
+			appendContent += '<div class="inner"> <div class="unit_input"> <input class="with_addon" name="statement[item_rate]" data-input-restriction="number" data-trigger="calculation" data-calculation="rate" data-autocomplete-fill="rate" placeholder="'+rateInputPlaceholder+'" type="text" value="0.00">';
+			
+			if (includeUnit === true) {
+				appendContent += '<div class="unit_lower"> <select class="with_addon" name="statement[item_unit]" data-action="on-select-custom" data-action-type="statement_item_unit" data-input-type="select"> <option value="" selected="selected">Unit</option> <option value="pc">pc</option> <option value="lb">lb.</option> <option value="ft">ft</option> <option value="hrs">hrs</option> <option value="d">d</option> <option value="m">m</option> <option value="y">y</option> <option value="custom">Custom</option> </select> <div class="select_arrows"></div> <input style="display:none;" data-action-target="on-select-custom" class="text_unit_input_css" name="statement[item_custom_unit]" placeholder="Unit" type="text"> </div>';
+			}
+			
+			appendContent += '</div></div>';
+		
+		}
+		
+		appendContent += '</li>';
+		/* rate, unit */
+		
+		/* amount */
+		appendContent += '<li class="item_column amount"> <div class="inner">'; 
+		
+		if (amountEditable === true) {
+			appendContent += '<div class="total_input"> <a href="javascript:void(0)"><span class="input_addon total border" data-currency="code">USD</span></a> <input class="with_addon total border" name="statement[item_amount]" data-trigger="calculation" data-calculation="line_total" data-format-number="precision" placeholder="0.00" type="text" data-input-restriction="number" value="0.00"> </div>';
+		} else {
+			appendContent += '<div class="total_input"> <a href="javascript:void(0)"><span class="input_addon total" data-currency="code">USD</span></a> <input class="with_addon total" data-format-number="precision" disabled name="statement[item_amount]" data-trigger="calculation" data-calculation="line_total" placeholder="0.00" type="text" value="0.00"> </div>';
+		}
+		
+		appendContent += '</div></li><li class="item_column action"> <div class="inner"> <div class="pull-right"> <div class="relative"> <a class="button dropdown-toggle"></a> <ul class="dropdown-menu"> <li><a data-action="remove_item_line" href="javascript:void(0)">Delete</a></li><li><a data-popup="open" data-popup-id="new_saved_'+lineTypeName+'" data-popup-detail="statement" href="javascript:void(0)">Save '+ucFirst(lineTypeName)+'</a></li></ul> </div></div></div></li></ul> </li>';
+		/* amount */
+
+		$("#drag_item_list").append(appendContent);		
+		
+		showHideTDS();
+		
+		fireUploadifivePlugin('file_upload_'+lineItemCount+'');
+		
+		fireAutocomplete('item');
+		fireAutocomplete('expense');
+		fireAutocomplete('mileage');
+		fireAutocomplete('time');
+		
+		fireTiprPlugin();
+		
+		refreshStatementCurrency();
+		refreshNumberFormatAndPrecision();
+		
+		makeCalculation();
+				
+		loadTagsPopover('tags');	
+		loadTagsPopover('taxes');	
+		loadTagsPopover('discounts');	
+		loadTagsPopover('shipping');	
+		
+		fireDatePicker('datepicker_item_'+lineItemCount+'');
+
+
+    });
+});
+
+
+/* REMOVE ITEM LINE */
+$('body').on('click', '[data-action="remove_item_line"]', function() {
+    "use strict";
+	
+	var itemLine = $(this).closest('.one_item_line');
+	
+	itemLine.find('.tag.tds').each(function() {
+		
+		var tagType = $(this).attr('data-tag-type');
+				
+		//console.log($('.tag.tds.'+tagType).length);
+		//console.log(itemLine.find('.tag.tds'+tagType).length);
+				
+		if ($('.tag.tds.'+tagType).length === itemLine.find('.tag.tds.'+tagType).length) {
+		$('[data-item-total="'+tagType+'"]').remove();	
+		}
+		
+	});
+	
+	itemLine.remove();
+	
+	showHideTDS();
+	makeCalculation();
+
+});
+
+
+/* ITEM LINES - ADD AND REMOVE TAX SHIPPING AND DISCOUNTS */
+var xTDS = 1;
+	
+$('body').on('click', '[data-add-total-tds]' ,function(e) {
+    "use strict";
+        e.preventDefault();
+		
+        xTDS++;
+		
+		var that = $(this);
+		var tdsType = $(this).attr('data-add-total-tds');
+		
+		$(this).addClass('loading');
+		$(this).find('.tipr_container_bottom').hide();
+		
+		var loadTagsKeyword;
+		var rateInputRestriction;
+				
+		switch (tdsType) {
+		
+			case 'tax':
+			loadTagsKeyword = 'taxes';
+			rateInputRestriction = 'percentage';
+			break;
+			
+			case 'discount':
+			loadTagsKeyword = 'discounts';
+			rateInputRestriction = 'percentage';
+			break;
+			
+			case 'shipping':
+			loadTagsKeyword = 'shipping';
+			rateInputRestriction = 'number';
+			break;
+			
+		}
+		
+        $.ajax({
+			type: 'POST',
+			url: '/php/autocomplete_handler.php?action_type=' + loadTagsKeyword,
+            dataType: 'json',
+            success: function(data) {
+								
+				var selectOptions;
+				var selectOptionsCount = 0;
+																
+				$.each(data, function(number) {
+					
+					selectOptionsCount ++;
+								
+					var name;
+					var rate;
+					var compiled;
+					
+					name = data[number].name;
+						
+					if ($.isNumeric(data[number].rate)) {
+						rate = (data[number].rate).toFixed(2);
+					} else {
+						rate = data[number].rate;
+					}
+										
+					if (rate) {
+					compiled = name + ' (' + rate + ')'; 	
+					} else {
+					compiled = name; 	
+					}
+					
+					selectOptions += '<option data-name="'+name+'" data-rate="'+rate+'" value="'+compiled+'">'+compiled+'</option>';
+				});
+				
+				var selectDisplayNone;
+				var inputDisplayNone;
+				
+				/* if options available, show in select box, if not, show "Add New ..." input */
+				if (selectOptionsCount > 1) {
+				selectDisplayNone = '';
+				inputDisplayNone = 'display: none;';
+				} else {
+				selectDisplayNone = 'display: none;';
+				inputDisplayNone = '';
+				}
+
+        		$("#tax_discount_shipping_wrapper").append('<ul class="statement_amount_container tds total '+tdsType+'" data-tds-type="'+tdsType+'"> <li class="statement_amount"> <a class="close_icon"></a> <div class="col second"> <div class="inner"> <select style="'+selectDisplayNone+'" data-trigger="calculation" data-calculation="select_total_'+tdsType+'" data-action="on-select-custom" data-action-type="statement_total_tds" data-input-type="select"> ' + selectOptions + ' <option value="custom">Add New ...</option> </select> <div class="select_arrows" style="'+selectDisplayNone+'"></div></div><div style="'+inputDisplayNone+'" data-action-target="on-select-custom"> <input class="inline tds_name" type="text" name="'+tdsType+'_name_' + xTDS + '" placeholder="'+ucFirst(tdsType)+' Name" style="width: 50%;"> <input class="inline tds_rate" id="'+tdsType+'_rate_' + xTDS + '" data-trigger="calculation" data-calculation="total_'+tdsType+'_rate" name="'+tdsType+'_rate_' + xTDS + '" type="text" data-input-restriction="'+rateInputRestriction+'" placeholder="Rate" style="width: 17%;margin-left: -6px;text-align: center;min-width: 62px;"> <input class="inline" name="'+tdsType+'_remember_' + xTDS + '" id="'+tdsType+'_remember_' + xTDS + '" type="checkbox" style="width: 5%;margin-left: 10px;"> <label for="'+tdsType+'_remember_' + xTDS + '" style="display: inline-block;width: 20%;">Remember</label> </div></div> </div></div><input class="col third no_input" type="text" disabled data-calculation="total_'+tdsType+'_result" value="(0.00)"></li></ul>');
+						
+			setAllTotalTDSValues();	
+			showHideTDS();
+			makeCalculation();
+			
+			$(that).removeClass('loading');
+				
+			}
+						
+		});
+			
+});
+
+
+function setTotalTDSValue(singleElement) {
+    "use strict";
+	
+		var TDSName;
+		var TDSRate;
+				
+		if (singleElement.val() === 'custom') {
+			
+			/* empty inputs */
+			singleElement.closest('.statement_amount_container.total').find('.tds_name').val('');
+			singleElement.closest('.statement_amount_container.total').find('.tds_rate').val('');
+			
+		} else {
+			
+			TDSName = $(singleElement).find('option:selected').attr('data-name');
+			TDSRate = $(singleElement).find('option:selected').attr('data-rate');
+		
+			singleElement.closest('.statement_amount_container.total').find('.tds_name').val(TDSName);
+			singleElement.closest('.statement_amount_container.total').find('.tds_rate').val(TDSRate);
+		
+		}
+		
+		makeCalculation();
+	
+}
+
+function setAllTotalTDSValues() {
+    "use strict";
+	$('select[data-trigger="calculation"]').each(function() {
+					
+		if (!$(this).closest('.statement_amount_container').find('.tds_name').val() && !$(this).closest('.statement_amount_container').find('.tds_rate').val()) {
+		setTotalTDSValue($(this));	
+		}
+				
+	});
+}
+	
+$('body').on('change', 'select[data-trigger="calculation"]', function() {
+    "use strict";
+	setTotalTDSValue($(this));	
+});
+
+
+/* REMOVE TDS LINE */
+$('body').on('click', '.statement_amount_container .close_icon', function() {
+	"use strict";
+	
+	$(this).closest('.statement_amount_container').remove();
+	
+	showHideTDS();
+	makeCalculation();
+	
+});
+
+
+/* RESET NEW TAG FORM */
+function resetNewTagItemForm(container, closeAsWell) {
+    "use strict";
+	
+	if(closeAsWell === true) {
+		// close menu
+		$(container).closest('.dropdown-menu.popover').hide();
+	}
+	
+	// empty input
+	$(container).closest('.new_tag_item_form').find('.new_tag_item_input').val('');
+	$(container).closest('.new_tag_item_form').find('.new_tag_item_rate_input').val('');
+	$(container).closest('.new_tag_item_form').find('.new_tag_item_input').removeClass('error');
+	$(container).closest('.new_tag_item_form').find('.new_tag_item_rate_input').removeClass('error');
+	
+	// untick "remember" field
+	$(container).closest('.new_tag_item_form').find('.remember_tag').removeAttr('checked');
+	
+	// switch to "select existing" mode
+	$(container).closest('.new_tag_item_form').toggleClass('hidden');
+	$(container).closest('.dropdown-menu').find('select').removeAttr('disabled');
+	$(container).closest('.new_tag_item_form').prev('.new_item.switch').show();
+	
+	// select default "choose tag" option
+	$(container).closest('.dropdown-menu.popover').find('.default_option').prop('selected', true);
+}
+
+
+/* RESET "EXISTING TAGS" SELECT OPTION MENU WHEN TAG MENU IS OPENED */
+$('body').on("click",".dropdown-toggle.popo", function(){
+    "use strict";
+	$(this).closest('.restrainer').find('.default_option').prop('selected', true);
+});
+
+
+/* ADD TAG - OPEN FORM INSIDE ADD TAG POPOVER */
+$("body").on("click", '.switch', function() {
+    "use strict";
+		
+	$(this).closest('.dropdown-menu').find('.default_option').attr('selected','selected');
+	
+	if($(this).hasClass('new_item')) {
+		
+		$(this).next('.new_tag_item_form').toggleClass('hidden');
+		$(this).closest('.dropdown-menu').find('select').attr('disabled','true');
+		$(this).closest('.dropdown-menu').find('select').attr('disabled','true');
+		$(this).closest('.dropdown-menu').find('.new_tag_item_input').focus();
+		$(this).hide();
+	
+	} else if($(this).hasClass('use_existing_tag_item')) {
+		
+		resetNewTagItemForm($(this), false);
+		
+	}
+});
+
+
+/* LOAD EXISTING TAGS, TAXES, DISCOUNTS, SHIPPINGS INTO NEW-TAG-ITEM SELECT OPTION MENUS */
+function loadTagsPopover(identifier) {
+	"use strict";
+			
+	var jsonType;
+				
+	switch (identifier) {
+	
+		case 'tags':
+		jsonType = 'single';
+		break;
+		
+		case 'taxes':
+		jsonType = 'double';
+		break;
+		
+		case 'discounts':
+		jsonType = 'double';
+		break;
+		
+		case 'shipping':
+		jsonType = 'double';
+		break;
+		
+	}
+		
+        $.ajax({
+			type: 'POST',
+			url: '/php/autocomplete_handler.php?action_type=' + identifier,
+            dataType: 'json',
+            success: function(data) {
+								
+				var selectOptions;
+																
+				$.each(data, function(number) {
+										
+					var name;
+					var rate;
+					var compiled;
+					
+					if (jsonType === 'double') {
+					name = data[number].name;
+						if ($.isNumeric(data[number].rate)) {
+						rate = (data[number].rate).toFixed(2);
+						} else {
+						rate = data[number].rate;
+						}
+					} else {
+					name = data[number];
+					}
+										
+					if (rate) {
+					compiled = name + ' (' + rate + ')'; 	
+					} else {
+					compiled = name; 	
+					}
+					
+					selectOptions += '<option data-name="'+name+'" data-rate="'+rate+'" value="'+compiled+'">'+compiled+'</option>';
+				});
+
+				$('[data-handler-autocomplete="'+identifier+'"]').html('<option class="default_option" value="">Choose</option>' + selectOptions);
+				
+			}
+						
+		});
+		
+}
+
+
+/* ADD TAGS DYNAMICALLY */
+    var x = 1;
+	function addTagItemsDynamically(container, tagType) {
+		'use strict';
+
+        x++;
+		
+		/* Check if an existing type is being added */
+		var existingTag;
+		
+		if ($(container).is('select')) {
+		existingTag = true;
+		}
+		
+		var tagName;
+		var tagRate;
+		var tagRemember;
+		
+		/* identify item line number - DELETE?*/
+		var lineNumber = $(container).closest('[data-parent-identifier="one_item_line"]').attr('data-id');
+		
+		
+		if (existingTag === true) {
+		/* existing tag */
+			var selectedOption = $(container).find('option:selected');
+			tagName = selectedOption.attr('data-name');
+			tagRate = selectedOption.attr('data-rate');
+					
+		} else {
+		/* new tag */
+			tagName = $(container).closest('.dropdown-menu').find('.new_tag_item_input').val();
+			tagRate = $(container).closest('.dropdown-menu').find('.new_tag_item_rate_input').val();	
+					
+			if ($(container).closest('.dropdown-menu').find('.remember_tag').is(':checked')) {
+			tagRemember = true;
+			} 
+		
+		}
+
+		var error = false;
+	
+		if(!tagName){
+			$(container).closest('.dropdown-menu').find('.new_tag_item_input').addClass('error');
+			error = true;
+		} else {
+			$(container).closest('.dropdown-menu').find('.new_tag_item_input').removeClass('error');
+		}
+		
+		if(tagType !== 'tag') {
+			if(!tagRate) {
+			$(container).closest('.dropdown-menu').find('.new_tag_item_rate_input').addClass('error');
+			error = true;
+			}
+			
+		}  
+		
+		if(error === true) {
+		return false;	
+		}
+		
+		var appendContent;
+		var tagAppendContent;
+		
+		var statementTDS;
+		var statementAppendContent;
+		
+		var tagClass;
+		
+		var itemTotalName;
+						
+        tagName = $('<div />').text(tagName).html()
+
+		switch (tagType) {
+		
+			case 'tag':
+			tagAppendContent = tagName;
+			tagClass = 'classic';
+			break;
+			
+			case 'tax':
+			tagAppendContent = tagName + ' (' + tagRate + ')';
+			statementTDS = true;
+			tagClass = 'tax tds';
+			itemTotalName = 'Tax Total';
+			break;
+			
+			case 'discount':
+			tagAppendContent = tagName + ' (' + tagRate + ')';
+			statementTDS = true;
+			tagClass = 'discount tds';
+			itemTotalName = 'Discount Total';
+			break;
+			
+			case 'shipping':
+			tagAppendContent = tagName + ' (' + tagRate + ')';
+			statementTDS = true;
+			tagClass = 'shipping tds';
+			itemTotalName = 'Shipping Total';
+			break;
+					
+		}
+		
+		/* add tag */
+		appendContent = '<div class="tag '+tagClass+'" id="tag_item_'+tagType+'_'+lineNumber+'_'+x+'" data-tag-type="'+tagType+'"> <a class="close_item" href="javascript:void(0)"></a> <div class="inside"> <span class="filename">'+tagAppendContent+'<span class="amount_info"></span></span> <input type="hidden" data-tag-info="name" value="'+tagName+'" /><input type="hidden" data-tag-info="rate" data-calculation="item_'+tagType+'_rate" value="'+tagRate+'" /> </div></div>';
+	
+        $(container).closest('[data-parent-identifier="one_item_line"]').find(".files_area").append(appendContent);
+		/* add tag */
+			
+		/* add TDS line */
+		if (statementTDS === true) {	
+    
+			var itemTotalExists = false;
+		
+			if ($('[data-item-total="'+tagType+'"]').length) {
+			itemTotalExists = true;	
+			}
+       
+			if (itemTotalExists !== true) {
+				
+	    		/* DELETE statementAppendContent = '<ul class="statement_amount_container item '+tagType+'" data-tag-id="tag_item_'+tagType+'_'+lineNumber+'_'+x+'" data-item-total="'+tagType+'" data-items="tag_item_'+tagType+'_'+lineNumber+'_'+x+'"> <li class="statement_amount"> <div class="col">'+itemTotalName+'</div><input class="col no_input" type="text" disabled data-calculation="item_'+tagType+'_result" value="0.00"> </li></ul>';*/
+				
+	    		statementAppendContent = '<ul class="statement_amount_container item '+tagType+'" data-item-total="'+tagType+'"> <li class="statement_amount"> <div class="col">'+itemTotalName+'</div><input class="col no_input" type="text" disabled data-calculation="item_'+tagType+'_result" value="0.00"> </li></ul>'; 
+			
+			}
+
+			$('#item_tax_discount_shipping_wrapper').append(statementAppendContent);
+		
+		}
+		/* add TDS line */
+		
+		if (tagRemember === true) {
+		saveCategory(tagType, tagName, tagRate);
+		}
+				
+		if (statementTDS === true) {	
+		makeCalculation();
+		showHideTDS();
+		}
+		
+		resetNewTagItemForm($(container), true);
+		
+}
+	
+$("body").on("click", 'label[data-create-tag]', function(e) {
+    "use strict";
+	e.preventDefault();
+	
+	var tagType = $(this).attr('data-create-tag');
+	addTagItemsDynamically($(this), tagType);
+});
+
+$("body").on("change", 'select[data-create-tag]', function(e) {
+    "use strict";
+	e.preventDefault();
+				
+	var tagType = $(this).attr('data-create-tag');
+	addTagItemsDynamically($(this), tagType);
+});
+
+/* REMOVE FILES, TAGS, TDS */
+$("body").on("click", '.close_item', function() {
+    "use strict";
+	
+	var tagType = $(this).closest('[data-tag-type]').attr('data-tag-type');
+	var tag = $(this).closest('[data-tag-type]');
+	
+	var doCalculation;
+	var removeTag;
+	var removeTDS;
+	
+	var emptyTag;
+	
+	switch (tagType) {
+	
+		case 'file':
+		removeTag = true;
+		break;
+		
+		case 'date':
+		emptyTag = true;
+		break;
+			
+		case 'tag':
+		removeTag = true;
+		break;
+	
+		case 'tax':
+		removeTag = true;
+		removeTDS = true;
+		doCalculation = true;
+		break;
+	
+		case 'discount':
+		removeTag = true;
+		removeTDS = true;
+		doCalculation = true;
+		break;
+	
+		case 'shipping':
+		removeTag = true;
+		removeTDS = true;
+		doCalculation = true;
+		break;
+		
+	}
+	
+	if (removeTag === true) {
+		tag.remove();
+	} else {
+		tag.hide();
+		
+		if (emptyTag === true) {
+		tag.find('.filename').html('');
+		tag.find('.filename').attr('data-real-date', '');
+		}
+		
+	}
+	
+	if (removeTDS === true) {
+		
+		if ($('.tag.tds.'+tagType).length === 0) {
+		$('[data-item-total="'+tagType+'"]').remove();	
+		}
+		
+		//$('[data-tag-id="' + tag.attr('id') + '"]').remove();
+		showHideTDS();
+		
+		
+	}
+	
+	if (doCalculation === true) {
+		makeCalculation();
+	}
+	
+});
+
+
+
+
+/* DYNAMICALLY HIDE AND SHOW TDS BUTTONS ACCORDING TO EXISTENCE OF OTHERS */
+function showHideTDS() {
+	"use strict";
+			
+		$('body').find('.textarea_actions.right .restrainer').removeClass('disabled');
+		$('body').find('.button_row.tax_discount_shipping').show();
+			
+		if ($('body').find('.tag.tds').length > 0) {
+			
+			$('body').find('.button_row.tax_discount_shipping').hide();
+			
+		} else if ($('body').find('.statement_amount_container.total.tds').length > 0) {
+			
+			$('body').find('.textarea_actions.right .restrainer').addClass('disabled');
+
+		} 
+			
+}
+
+
+/* RESET NEW LINK FORM */
+function resetLinkForm(container, closeAsWell) {
+    "use strict";
+	
+	if(closeAsWell === true) {
+		// close menu
+		$(container).closest('.dropdown-menu.popover.links').hide();
+	}
+	
+	// empty inputs and remove errors
+	$(container).closest('.dropdown-menu.popover.links').find('.link_ttd').val('');
+	$(container).closest('.dropdown-menu.popover.links').find('.link_url').val('http://');
+	$(container).closest('.dropdown-menu.popover.links').find('.link_ttd').removeClass('error');
+	$(container).closest('.dropdown-menu.popover.links').find('.link_url').removeClass('error');
+	
+}
+
+
+/* ADD LINKS DYNAMICALLY */
+$(document).ready(function() {
+    "use strict";
+    var x = 1;
+	
+    $("body").on("click", '.add_link', function(e) {
+        e.preventDefault();
+		
+        x++;
+		
+		var TextToDisplay = $(this).closest('[data-parent-identifier="one_item_line"]').find(".link_ttd").val();
+		var LinkURL = $(this).closest('[data-parent-identifier="one_item_line"]').find(".link_url").val();
+		
+		var error = false;
+		
+		if (!TextToDisplay) {
+			$(this).closest('[data-parent-identifier="one_item_line"]').find(".link_ttd").addClass('error');
+			error = true;
+		} 
+		
+		if(!LinkURL || !/^(http|https|ftp):\/\/[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$/i.test(LinkURL)){
+			$(this).closest('[data-parent-identifier="one_item_line"]').find(".link_url").addClass('error');
+			error = true;
+		}
+		
+		if(error == true) {
+			return false;	
+		}
+
+        var textareaContent = $(this).closest('[data-parent-identifier="one_item_line"]').find("textarea").val();
+		
+		$(this).closest('[data-parent-identifier="one_item_line"]').find("textarea").html(textareaContent +'['+TextToDisplay+']('+LinkURL+')');
+		$(this).closest('[data-parent-identifier="one_item_line"]').find("textarea").val(textareaContent +'['+TextToDisplay+']('+LinkURL+')');
+		
+		resetLinkForm($(this), true);
+		
+    });
+});
+
+/* STATEMENT - ITEM ROW - TOTAL - CALCULATION */
+function makeCalculation() {
+	"use strict";
+	
+	//alert('calc triggered');
+	
+	var subTotal = 0;
+	var Total = 0;
+	
+	$('.one_item_line.actual').each(function() {
+		
+		var rate;
+		var quantity;
+		var lineTotal;
+		
+		var zero = 0;
+		
+		if ($(this).attr('data-type') === 'expense') {
+			
+			lineTotal = parseFloat($(this).find('[data-calculation="line_total"]').val());
+			
+		} else if ($(this).attr('data-type') === 'time') {
+		
+			var timeInput = $(this).find('[data-calculation="quantity"]').val();
+		
+			rate = parseFloat($(this).find('[data-calculation="rate"]').val());
+			var ratePerSecond = rate / 60;
+		
+			var timeSplitArr = timeInput.split(':');
+			var minutes = timeSplitArr[0];
+			var seconds = timeSplitArr[1];
+		
+			var totalSeconds = parseInt(minutes) * 60 + parseInt(seconds);
+				
+			lineTotal = parseFloat(totalSeconds * ratePerSecond).toFixed(getCurrentNumberFormatVars('precision'));
+										
+			if(isNaN(parseFloat(lineTotal)) === true) {
+			$(this).find('[data-calculation="line_total"]').val(zero.toFixed(parseInt(getCurrentNumberFormatVars('precision'))));
+			} else {
+			$(this).find('[data-calculation="line_total"]').val(lineTotal);
+			}
+
+		} else {
+		
+			rate = parseFloat($(this).find('[data-calculation="rate"]').val());
+			quantity = parseFloat($(this).find('[data-calculation="quantity"]').val());
+							
+			// new 
+			lineTotal = (parseFloat((quantity * rate) * 100) / 100).toFixed(parseInt(getCurrentNumberFormatVars('precision')));
+		
+			if(isNaN(parseFloat(lineTotal)) === true) {
+			$(this).find('[data-calculation="line_total"]').val(zero.toFixed(parseInt(getCurrentNumberFormatVars('precision'))));
+			} else {
+			$(this).find('[data-calculation="line_total"]').val(lineTotal);
+			}
+						
+		}
+	});
+		
+	$('.one_item_line.actual').find('[data-calculation="line_total"]').each(function() {
+		subTotal = subTotal + parseFloat($(this).val());
+	});
+				
+	if(isNaN(parseFloat(subTotal)) === true) {
+	$('[data-form-type="statement"]').find('[data-calculation="subtotal"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	} else {
+	$('[data-form-type="statement"]').find('[data-calculation="subtotal"]').val(formatNumber(subTotal, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	}
+	
+	// Apply Item Discounts
+	var itemDiscountAmountsCombined = 0;
+	
+	$('body').find('[data-calculation="item_discount_rate"]').each(function() {
+				
+		var tagID = $(this).closest('.tag.discount').attr('id');
+		var itemLineTotal = $(this).closest('.one_item_line').find('[data-calculation="line_total"]').val();
+		
+		var DiscountValue = $(this).val();
+		var DiscountAmount;
+				
+			if (DiscountValue.indexOf("%") >= 0) {
+				DiscountValue = DiscountValue.replace('%','');
+				DiscountAmount = (itemLineTotal/100) * DiscountValue;
+			} else if(DiscountValue) {
+				DiscountAmount = parseFloat(DiscountValue);
+			} else {
+				DiscountAmount = 0;
+			}
+			
+			if(isNaN(parseFloat(DiscountAmount)) === true) {
+			
+			/* add amount to statement amount
+			$('.statement_amount_container.item[data-tag-id="'+tagID+'"]').find('[data-calculation="item_discount_result"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			*/
+			
+			// append amount info to tag
+			$('.tag#' + tagID + ' .filename .amount_info').html(' = <span data-currency="code">'+$('.td_currency').html()+'</span> ' + formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+			} else {
+			
+			/* add amount to statement amount
+			$('.statement_amount_container.item[data-tag-id="'+tagID+'"]').find('[data-calculation="item_discount_result"]').val('-' + formatNumber(DiscountAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			*/
+			
+			// append amount info to tag
+			$('.tag#' + tagID + ' .filename .amount_info').html(' = <span data-currency="code">'+$('.td_currency').html()+'</span> ' + formatNumber(DiscountAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+			}
+		
+			itemDiscountAmountsCombined = itemDiscountAmountsCombined + DiscountAmount;
+			
+			$('[data-item-total="discount"]').find('[data-calculation="item_discount_result"]').val('-' + formatNumber(itemDiscountAmountsCombined, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+	});
+	
+	// Apply Total Discounts
+	var totalDiscountAmountsCombined = 0;
+	
+	$('body').find('[data-calculation="total_discount_rate"]').each(function() {
+		
+		var DiscountValue = $(this).val();
+		var DiscountAmount;
+		
+			if (DiscountValue.indexOf("%") >= 0) {
+				DiscountValue = DiscountValue.replace('%','');
+				DiscountAmount = (subTotal/100) * DiscountValue;
+			} else if(DiscountValue) {
+				DiscountAmount = parseFloat(DiscountValue);
+			} else {
+				DiscountAmount = 0;
+			}
+		
+			if(isNaN(parseFloat(DiscountAmount)) === true) {
+			$(this).closest('.statement_amount_container.total').find('[data-calculation="total_discount_result"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			} else {
+			$(this).closest('.statement_amount_container.total').find('[data-calculation="total_discount_result"]').val('-'+ formatNumber(DiscountAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			}
+		
+			totalDiscountAmountsCombined = totalDiscountAmountsCombined + DiscountAmount;
+		
+	});
+	
+	
+	var TotalBeforeTax;
+	
+	if (totalDiscountAmountsCombined > 0) {
+	TotalBeforeTax = subTotal - parseFloat(totalDiscountAmountsCombined);
+	} else if (itemDiscountAmountsCombined > 0) {
+	TotalBeforeTax = subTotal - parseFloat(itemDiscountAmountsCombined);
+	} else {
+	TotalBeforeTax = subTotal;
+	}
+	
+	// Apply Item Taxes
+	var itemTaxAmountsCombined = 0;
+	
+	$('body').find('[data-calculation="item_tax_rate"]').each(function() {
+		
+		var tagID = $(this).closest('.tag.tax').attr('id');
+		var itemLineTotal = $(this).closest('.one_item_line').find('[data-calculation="line_total"]').val();
+		
+		// Calculate item discounts sum again
+		var itemDiscountsParticular = 0;
+		
+		$(this).closest('.one_item_line').find('[data-calculation="item_discount_rate"]').each(function() {
+			
+			var DiscountValue = $(this).val();
+			var DiscountAmount;
+				
+				if (DiscountValue.indexOf("%") >= 0) {
+					DiscountValue = DiscountValue.replace('%','');
+					DiscountAmount = (itemLineTotal/100) * DiscountValue;
+				} else if(DiscountValue) {
+					DiscountAmount = parseFloat(DiscountValue);
+				} else {
+					DiscountAmount = 0;
+				}
+				
+				itemDiscountsParticular = itemDiscountsParticular + DiscountAmount;
+			
+		});
+		
+		if (itemDiscountsParticular > 0) {
+		itemLineTotal = itemLineTotal - parseFloat(itemDiscountsParticular);
+		} 
+		
+		var TaxValue = $(this).val();
+		var TaxAmount;
+						
+			if (TaxValue.indexOf("%") >= 0) {
+				TaxValue = TaxValue.replace('%','');
+				TaxAmount = (itemLineTotal/100) * TaxValue;
+			} else if(TaxValue) {
+				TaxAmount = parseFloat(TaxValue);
+			} else {
+				TaxAmount = 0;
+			}
+			
+								
+			if(isNaN(parseFloat(TaxAmount)) === true) {
+			
+			/* add amount to statement amount
+			$('.statement_amount_container.item[data-tag-id="'+tagID+'"]').find('[data-calculation="item_tax_result"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			*/
+			
+			// append amount info to tag
+			$('.tag#' + tagID + ' .filename .amount_info').html(' = <span data-currency="code">'+$('.td_currency').html()+'</span> ' + formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+			} else {
+				
+			/* add amount to statement amount
+			$('.statement_amount_container.item[data-tag-id="'+tagID+'"]').find('[data-calculation="item_tax_result"]').val(formatNumber(TaxAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			*/
+			
+			// append amount info to tag
+			$('.tag#' + tagID + ' .filename .amount_info').html(' = <span data-currency="code">'+$('.td_currency').html()+'</span> ' + formatNumber(TaxAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+			}
+				
+			itemTaxAmountsCombined = itemTaxAmountsCombined + TaxAmount;
+			
+			$('[data-item-total="tax"]').find('[data-calculation="item_tax_result"]').val(formatNumber(itemTaxAmountsCombined, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+	});
+		
+	// Apply Total Taxes
+	var totalTaxAmountsCombined = 0;
+	
+	$('body').find('[data-calculation="total_tax_rate"]').each(function() {
+
+		var TaxValue = $(this).val();
+		var TaxAmount;
+		
+			if (TaxValue.indexOf("%") >= 0) {
+				TaxValue = TaxValue.replace('%','');
+				TaxAmount = (TotalBeforeTax/100) * TaxValue;
+			} else if(TaxValue) {
+				TaxAmount = parseFloat(TaxValue);
+			} else {
+				TaxAmount = 0;
+			}
+		
+			if(isNaN(parseFloat(TaxAmount)) === true) {
+			$(this).closest('.statement_amount_container.total').find('[data-calculation="total_tax_result"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			} else {
+			$(this).closest('.statement_amount_container.total').find('[data-calculation="total_tax_result"]').val(formatNumber(TaxAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			}
+		
+			totalTaxAmountsCombined = totalTaxAmountsCombined + TaxAmount;
+			
+	});
+	
+	var TotalAfterTax;
+	
+	if (totalTaxAmountsCombined > 0) {
+	TotalAfterTax = TotalBeforeTax + parseFloat(totalTaxAmountsCombined);
+	} else if (itemTaxAmountsCombined > 0) {
+	TotalAfterTax = TotalBeforeTax + parseFloat(itemTaxAmountsCombined);
+	} else {
+	TotalAfterTax = TotalBeforeTax;
+	}
+	
+	// Apply Item Shippings
+	var itemShippingAmountsCombined = 0;
+	
+	$('body').find('[data-calculation="item_shipping_rate"]').each(function() {
+		
+		var tagID = $(this).closest('.tag.shipping').attr('id');
+		
+		var ShippingValue = $(this).val();
+		var ShippingAmount;
+				
+			if(ShippingValue) {
+				ShippingAmount = parseFloat(ShippingValue);
+			} else {
+				ShippingAmount = 0;
+			}
+			
+			if(isNaN(parseFloat(ShippingAmount)) === true) {
+			
+			/* add amount to statement amount
+			$('.statement_amount_container.item[data-tag-id="'+tagID+'"]').find('[data-calculation="item_shipping_result"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			*/
+			
+			// append amount info to tag
+			$('.tag#' + tagID + ' .filename .amount_info').html(' = <span data-currency="code">'+$('.td_currency').html()+'</span> ' + formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+			} else {
+			
+			/* add amount to statement amount
+			$('.statement_amount_container.item[data-tag-id="'+tagID+'"]').find('[data-calculation="item_shipping_result"]').val(formatNumber(ShippingAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			*/
+			
+			// append amount info to tag
+			$('.tag#' + tagID + ' .filename .amount_info').html(' = <span data-currency="code">'+$('.td_currency').html()+'</span> ' + formatNumber(ShippingAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+			}
+		
+			itemShippingAmountsCombined = itemShippingAmountsCombined + ShippingAmount;
+			
+			$('[data-item-total="shipping"]').find('[data-calculation="item_shipping_result"]').val(formatNumber(itemShippingAmountsCombined, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+			
+	});
+
+	// Apply Total Shippings
+	var totalShippingAmountsCombined = 0;
+	
+	$('body').find('[data-calculation="total_shipping_rate"]').each(function() {
+		
+		var ShippingValue = $(this).val();
+		var ShippingAmount;
+		
+		if (ShippingValue) {
+			ShippingAmount = parseFloat(ShippingValue);
+		} else {
+			ShippingAmount = 0;
+		}
+		
+		if(isNaN(parseFloat(ShippingAmount)) === true) {
+		$(this).closest('.statement_amount_container.total').find('[data-calculation="total_shipping_result"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+		} else {
+		$(this).closest('.statement_amount_container.total').find('[data-calculation="total_shipping_result"]').val(formatNumber(ShippingAmount, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+		}
+		
+		totalShippingAmountsCombined = totalShippingAmountsCombined + ShippingAmount;
+		
+	});
+	
+	if (totalShippingAmountsCombined > 0) {
+	Total = TotalAfterTax + parseFloat(totalShippingAmountsCombined);
+	} else if (itemShippingAmountsCombined > 0) {
+	Total = TotalAfterTax + parseFloat(itemShippingAmountsCombined);
+	} else {
+	Total = TotalAfterTax;
+	}
+	
+	// get already paid amount for total due value
+	var amountAlreadyPaid = parseFloat($('[data-form-type="statement"]').find('[data-calculation="total_due"]').attr('data-paid-amount'));
+	
+	if(isNaN(parseFloat(Total)) === true) {
+	// total
+	$('[data-form-type="statement"]').find('[data-calculation="total"]').val(formatNumber(0, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	// total due
+	$('[data-form-type="statement"]').find('[data-calculation="total_due"]').val(formatNumber((0 - amountAlreadyPaid), getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	} else {
+	// total
+	$('[data-form-type="statement"]').find('[data-calculation="total"]').val(formatNumber(Total, getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	// total due
+	$('[data-form-type="statement"]').find('[data-calculation="total_due"]').val(formatNumber((Total - amountAlreadyPaid), getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	}
+	
+	
+}
+
+$('body').on('keyup', 'input[data-trigger="calculation"]', function() {
+	"use strict";
+	makeCalculation();
+});
+
+
+/* CURRENCY ISO CODE ARRAY */
+var currencyCodesIso = {
+	AED:"AED",
+	AFN:"؋",
+	ALL:"Lek",
+	AMD:"AMD",
+	ANG:"ƒ",
+	AOA:"AOA",
+	ARS:"$",
+	AUD:"$",
+	AWG:"ƒ",
+	AZN:"ман",
+	BAM:"KM",
+	BBD:"$",
+	BDT:"BDT",
+	BGN:"лв",
+	BHD:"BHD",
+	BIF:"BIF",
+	BMD:"$",
+	BND:"$",
+	BOB:"$b",
+	BOV:"BOV",
+	BRL:"R$",
+	BSD:"$",
+	BTN:"BTN",
+	BWP:"P",
+	BYR:"p.",
+	BZD:"BZ$",
+	CAD:"$",
+	CDF:"CDF",
+	CHE:"CHE",
+	CHF:"CHF",
+	CHW:"CHW",
+	CLF:"CLF",
+	CLP:"$",
+	CNY:"¥",
+	COP:"$",
+	COU:"COU",
+	CRC:"₡",
+	CUC:"CUC",
+	CUP:"₱",
+	CVE:"CVE",
+	CZK:"Kč",
+	DJF:"DJF",
+	DKK:"kr",
+	DOP:"RD$",
+	DZD:"DZD",
+	EGP:"£",
+	ERN:"ERN",
+	ETB:"ETB",
+	EUR:"€",
+	FJD:"$",
+	FKP:"£",
+	GBP:"£",
+	GEL:"GEL",
+	GHS:"GHS",
+	GIP:"£",
+	GMD:"GMD",
+	GNF:"GNF",
+	GTQ:"Q",
+	GYD:"$",
+	HKD:"$",
+	HNL:"L",
+	HRK:"kn",
+	HTG:"HTG",
+	HUF:"Ft",
+	IDR:"Rp",
+	ILS:"₪",
+	INR:"INR",
+	IQD:"IQD",
+	IRR:"﷼",
+	ISK:"kr",
+	JMD:"J$",
+	JOD:"JOD",
+	JPY:"¥",
+	KES:"KES",
+	KGS:"лв",
+	KHR:"៛",
+	KMF:"KMF",
+	KPW:"₩",
+	KRW:"₩",
+	KWD:"KWD",
+	KYD:"$",
+	KZT:"лв",
+	LAK:"₭",
+	LBP:"£",
+	LKR:"Rs",
+	LRD:"$",
+	LSL:"LSL",
+	LTL:"Lt",
+	LVL:"Ls",
+	LYD:"LYD",
+	MAD:"MAD",
+	MDL:"MDL",
+	MGA:"MGA",
+	MKD:"ден",
+	MMK:"MMK",
+	MNT:"₮",
+	MOP:"MOP",
+	MRO:"MRO",
+	MUR:"Rs",
+	MVR:"MVR",
+	MWK:"MWK",
+	MXN:"$",
+	MXV:"MXV",
+	MYR:"RM",
+	MZN:"MT",
+	NAD:"$",
+	NGN:"₦",
+	NIO:"C$",
+	NOK:"kr",
+	NPR:"Rs",
+	NZD:"$",
+	OMR:"﷼",
+	PAB:"B/.",
+	PEN:"S/.",
+	PGK:"PGK",
+	PHP:"₱",
+	PKR:"Rs",
+	PLN:"zł",
+	PYG:"Gs",
+	QAR:"﷼",
+	RON:"lei",
+	RSD:"Дин.",
+	RUB:"руб",
+	RWF:"RWF",
+	SAR:"﷼",
+	SBD:"$",
+	SCR:"Rs",
+	SDG:"SDG",
+	SEK:"kr",
+	SGD:"$",
+	SHP:"£",
+	SLL:"SLL",
+	SOS:"S",
+	SRD:"$",
+	SSP:"SSP",
+	STD:"STD",
+	SYP:"£",
+	SZL:"SZL",
+	THB:"฿",
+	TJS:"TJS",
+	TMT:"TMT",
+	TND:"TND",
+	TOP:"TOP",
+	TRY:"TRY",
+	TTD:"TT$",
+	TWD:"NT$",
+	TZS:"TZS",
+	UAH:"₴",
+	UGX:"UGX",
+	USD:"$",
+	USN:"USN",
+	USS:"USS",
+	UYI:"UYI",
+	UYU:"$U",
+	UZS:"лв",
+	VEF:"Bs",
+	VND:"₫",
+	VUV:"VUV",
+	WST:"WST",
+	XAF:"XAF",
+	XAG:"XAG",
+	XAU:"XAU",
+	XBA:"XBA",
+	XBB:"XBB",
+	XBC:"XBC",
+	XBD:"XBD",
+	XCD:"$",
+	XDR:"XDR",
+	XFU:"XFU",
+	XOF:"XOF",
+	XPD:"XPD",
+	XPF:"XPF",
+	XPT:"XPT",
+	XTS:"XTS",
+	XXX:"XXX",
+	YER:"﷼",
+	ZAR:"R",
+	ZMW:"ZMW",
+    EEK:"EEK",
+    SVC:"$",
+    SKK:"SKK",
+    TMM:"TMM",    
+    ZMK:"ZK",
+    ZWD:"ZWD",
+};
+
+
+/* REFRESH STATEMENT CURRENCY ACCORDING TO INPUT */
+function refreshStatementCurrency() {
+	"use strict";
+
+	var currencyCode = $('[name="statement[currency]"]').val();
+	var currencySymbol = currencyCodesIso[(currencyCode.toUpperCase())];
+	
+	if ($('[name="statement[currency]"]').attr('data-currency-format') === 'code') {
+	$('[data-currency="code"]').html(currencyCode.toUpperCase());
+	} else if ($('[name="statement[currency]"]').attr('data-currency-format') === 'symbol') {
+	$('[data-currency="code"]').html(currencySymbol);
+	}
+	
+}
+
+
+/* SHAKE TEXT INPUT */
+$('body').on('click', '[data-currency="code"]', function() {
+	"use strict";
+	function customRemoveShakeInputClass() {
+	$('[name="statement[currency]"]').removeClass('shakeInput');
+	$('[name="statement[currency]"]').closest('.form_row').find('.select_arrows').fadeIn(50);
+	}
+	
+	$('[name="statement[currency]"]').addClass('shakeInput');
+	$('[name="statement[currency]"]').closest('.form_row').find('.select_arrows').hide();
+	$.wait(500).then(customRemoveShakeInputClass);
+});
+
+
+/* NUMBER FORMATTING + PRECISION */
+function formatNumber(numberToFormat, formatType, precision) {
+"use strict";	
+
+var thousands;
+var decimals;
+
+switch (formatType) {
+	
+	case 1:
+	thousands = ',';
+	decimals = '.';
+	break;
+	
+	case 2:
+	thousands = '.';
+	decimals = ',';
+	break;
+	
+	case 3:
+	thousands = ' ';
+	decimals = '.';
+	break;
+	
+	case 4:
+	thousands = ' ';
+	decimals = ',';
+	break;
+	
+	case 5:
+	thousands = '';
+	decimals = '.';
+	break;
+	
+	case 6:
+	thousands = '';
+	decimals = ',';
+	break;
+
+	default:
+	thousands = ',';
+	decimals = '.';
+	
+}
+
+if (!precision) {
+	precision = 2;
+}
+
+return accounting.formatMoney(numberToFormat, '', precision, thousands, decimals);
+	
+/* usage: formatNumber([number], [int formatType, 1-6], [str precision, 0-4]) */
+}
+
+
+/* GET CURRENT NUMBER FORMAT & PRECISION VALUE */
+function getCurrentNumberFormatVars(type) {
+"use strict";	
+
+	var numberFormat = $('[name="statement[number_format]"]').val();
+	var numberPrecision = $('[name="statement[number_precision]"]').val();
+	
+	if (type === 'format') {
+		if (isPrivateStatementPage($('input[name="current_page"]').val())) {
+		return parseInt(numberFormat);
+		} else {
+		return 1;	
+		}
+	} else if (type === 'precision') {
+		if (isPrivateStatementPage($('input[name="current_page"]').val())) {
+		return numberPrecision;
+		} else {
+		return 2;	
+		}
+	}
+	
+}
+
+
+/* REFRESH NUMBER FORMATTING & PRECISION */
+function refreshNumberFormatAndPrecision() {
+"use strict";	
+
+	$('[data-format-number="both"]').each(function() {
+		$(this).val(formatNumber(parseFloat($(this).val()), getCurrentNumberFormatVars('format'), getCurrentNumberFormatVars('precision')));
+	});
+	
+	$('[data-format-number="precision"]').each(function() {
+		$(this).val(parseFloat($(this).val()).toFixed(getCurrentNumberFormatVars('precision')));
+	});
+	
+}
+
+/* SUBMIT STATEMENT */
+$('body').on('click', '[data-submit-statement="true"]:not(.flip)', function(event) {
+	"use strict";
+	event.preventDefault();
+		
+	var that = $(this);
+	var statementForm = $(this).closest('body').find('[data-form-type="statement"]');
+	
+	var submitAction = $(this).attr('data-submit-statement-action');
+			
+	var successMessage = ['show', 'success', $(statementForm).attr('data-success-message')];
+	
+	/* validation 
+	if (!validateFormFields(statementForm)) {
+	return false;	
+	}
+	/* validation */
+		
+	var statementType = $(statementForm).find('[name="statement[type]"]').val();
+	var statementTypeTranslated;
+	
+	var statementRecurring = $(statementForm).find('[name="statement[recurring]"]').val();
+	
+	var statementDate = $(statementForm).find('[name="statement[date]"]').attr('data-real-date');
+	var statementExpirationDate;
+	var daysToAdd;
+	
+	var statementStatus;
+	var statementRecurringSendType;
+	
+	// for edit, current statement status
+	var currentStatementStatus = $(statementForm).find('[name="statement[statement_status]"]').val();
+	
+	var handlerEndpoint;
+	var handlerAction = $(statementForm).attr('data-handler-action');
+	var dataObjectID = $(statementForm).attr('data-object-id');
+	
+	var redirectPath;
+	
+	var redirectPathElement;
+	var redirectFile;
+	var redirectPage;
+	var redirectType;
+	
+	var loadingItem;
+	
+	switch (statementType) {
+	
+		case 'invoice':
+		
+		if (handlerAction === 'create' || (handlerAction === 'edit' && currentStatementStatus === 'draft')) {
+			
+			if (submitAction === 'save_draft' || submitAction === 'save_start_profile') {
+			loadingItem = $(this);
+			} else {
+			loadingItem = $(this).closest('.dropdown').find('.dropdown-toggle');
+			}
+		
+		} else {
+		
+		loadingItem = $(this);		
+		
+		} 
+		
+		statementTypeTranslated = 1;
+		statementStatus = handlerAction === 'create' ? 'draft' : $(statementForm).find('[name="statement[statement_status]"]').val();
+		handlerEndpoint = 'invoice';
+		redirectPathElement = 'invoices';
+		redirectFile = 'view_statement';
+		redirectPage = 'view_invoice';
+		redirectType = 'invoice';
+		
+		if (statementRecurring == 1) {				
+		statementRecurringSendType = parseInt($(statementForm).find('[name="statement[recurring_occurrence_actions]"]:checked').val());
+		}
+		
+		if (handlerAction === 'create' || (handlerAction === 'edit' && currentStatementStatus === 'draft')) {
+			
+			if (submitAction === 'save_start_profile') {
+			statementStatus	= 'active';
+			} else if (submitAction === 'save' || submitAction === 'save_send') {
+			statementStatus	= 'unsent';
+			} else if (submitAction === 'save_mark_sent') {
+			statementStatus	= 'sent';
+			} else {
+			statementStatus	= 'draft';
+			}
+		
+		} else {
+		statementStatus	= $(statementForm).find('[name="statement[statement_status]"]').val();
+		}
+		
+		/* submit actions */
+		if (submitAction === 'save_send') {
+		redirectPathElement = 'invoices';
+		redirectFile = 'send_statement';
+		redirectPage = 'send_invoice';
+		redirectType = 'invoice';
+		} 
+		/* submit actions */
+		
+		break;
+		
+		case 'bill':
+		
+		loadingItem = $(this);
+		
+		statementTypeTranslated = 3;
+		handlerEndpoint = 'bill';
+		redirectPathElement = 'bills';
+		redirectFile = 'view_statement';
+		redirectPage = 'view_bill';
+		redirectType = 'bill';
+		
+		if (statementRecurring == 1) {		
+		statementRecurringSendType = 1;
+		}
+		
+		if (handlerAction === 'create' || (handlerAction === 'edit' && currentStatementStatus === 'draft')) {
+		
+			if (submitAction === 'save_start_profile') {
+			statementStatus	= 'active';
+			} else if (submitAction === 'save_draft') {
+			statementStatus	= 'draft';
+			} else {
+			statementStatus	= 'payable';
+			}
+					
+		} else {
+		statementStatus = $(statementForm).find('[name="statement[statement_status]"]').val();	
+		}
+		
+		break;
+		
+		case 'estimate':
+		
+		if (handlerAction === 'create' || (handlerAction === 'edit' && currentStatementStatus === 'draft')) {
+			
+			if (submitAction === 'save_draft' || submitAction === 'save_start_profile') {
+			loadingItem = $(this);
+			} else {
+			loadingItem = $(this).closest('.dropdown').find('.dropdown-toggle');
+			}
+		
+		} else {
+		loadingItem = $(this);
+		}
+		
+		statementTypeTranslated = 2;
+		statementStatus = handlerAction === 'create' ? 'draft' : $(statementForm).find('[name="statement[statement_status]"]').val();
+		handlerEndpoint = 'estimate';
+		redirectPathElement = 'estimates';
+		redirectFile = 'view_statement';
+		redirectPage = 'view_estimate';
+		redirectType = 'estimate';
+		
+		if (handlerAction === 'create' || (handlerAction === 'edit' && currentStatementStatus === 'draft')) {
+		
+			if (submitAction === 'save' || submitAction === 'save_send') {
+			statementStatus	= 'unsent';
+			} else if (submitAction === 'save_mark_sent') {
+			statementStatus	= 'sent';
+			} else {
+			statementStatus	= 'draft';
+			}
+				
+		} else {
+		statementStatus	= $(statementForm).find('[name="statement[statement_status]"]').val();
+		}
+		
+		/* submit actions */
+		if (submitAction === 'save_send') {
+		redirectPathElement = 'estimates';
+		redirectFile = 'send_statement';
+		redirectPage = 'send_estimate';
+		redirectType = 'estimate';
+		} 
+		/* submit actions */
+		
+		/* count forward expiration days from estimate date */
+		if ($(statementForm).find('[name="statement[expiration_date]"]').is(':visible')) {
+		statementExpirationDate = $(statementForm).find('[name="statement[expiration_date]"]').attr('data-real-date');
+		
+		} else {
+		daysToAdd = $(statementForm).find('[name="statement[expiration]"]').val();
+		
+		if (daysToAdd === '0') {
+		statementExpirationDate = '';
+		} else {
+		statementExpirationDate = moment(statementDate).add(daysToAdd, "days").format("YYYY-MM-DD");
+		}
+		
+		}
+		/* count forward expiration days from estimate date */
+		break;
+		
+	}
+	
+	loadingItem.addClass('loading');
+	
+	/* count forward invoice/bill due date from selected invoice/bill date */
+	var statementDueDate;
+	
+	if ($(statementForm).find('[name="statement[due_date]"]').is(':visible')) {
+	statementDueDate = $(statementForm).find('[name="statement[due_date]"]').attr('data-real-date');
+	} else {
+	daysToAdd = $(statementForm).find('[name="statement[due]"]').val();
+	statementDueDate = moment(statementDate).add(daysToAdd, "days").format("YYYY-MM-DD");
+	}
+	/* count forward invoice/bill due date from selected invoice/bill date */
+	
+	/* check for custom statement titles */
+	var customStatementTitle;
+	
+	if ($(statementForm).find('[name="statement[custom_title]"]').val() !== $(statementForm).find('[name="statement[custom_title]"]').attr('data-default')) {
+		customStatementTitle = $(statementForm).find('[name="statement[custom_title]"]').val();
+	} 
+	/* check for custom statement titles */
+						
+	var postData = {
+		  statement_status: statementStatus,
+		  custom_statement_title: customStatementTitle,
+		  statement_type: statementTypeTranslated,
+		  statement_summary: $(statementForm).find('[name="statement[description]"]').val(),
+		  statement_id: $(statementForm).find('[name="statement[number]"]').val(),
+		  statement_currency: $(statementForm).find('[name="statement[currency]"]').val().toUpperCase(),
+		  statement_language: $(statementForm).find('[name="statement[language]"]').val(),
+		  statement_date: statementDate,
+		  statement_notes: $(statementForm).find('[name="statement[notes]"]').val(),
+		  statement_due_date: statementDueDate, 
+		  statement_expiration_date: statementExpirationDate, 
+		  statement_ref_id: $(statementForm).find('[name="statement_po_number"]').val(),
+		  connection_id: $(statementForm).find('[name="client_id"]').val(),
+		  
+		  /* statement settings */
+		  payment_options: [],
+		  allow_partial_payments: $(statementForm).find('[name="statement[partial_payments]"]').prop('checked') ? 1 : '', 
+		  send_receipts: $(statementForm).find('[name="statement[send_receipts]"]').prop('checked') ? 1 : '', 
+		  send_reminders: $(statementForm).find('[name="statement[send_reminders]"]').prop('checked') ? 1 : '', 
+		  statement_send_attach_pdf: $(statementForm).find('[name="statement[attach_pdf_copy]"]').prop('checked') ? 1 : '', 
+		  statement_send_type: $(statementForm).find('[name="statement[mail_default_custom]"]:checked').val() === 'custom' ? 2 : 1,
+		  statement_send_to: $(statementForm).find('[name="custom_email_to"]').val(),
+		  statement_send_bcc: $(statementForm).find('[name="custom_email_bcc"]').val(),
+		  statement_send_subject: $(statementForm).find('[name="custom_email_subject"]').val(),
+		  statement_send_content: $(statementForm).find('[name="custom_email_content"]').val(),
+		  /* statement settings */
+		  
+		  /* recurring settings here */
+		  statement_recurring: $(statementForm).find('[name="statement[recurring]"]').val(),
+		  statement_recurring_send_type: statementRecurringSendType,
+		  statement_recurring_profile_name: $(statementForm).find('[name="statement[recurring_profile_name]"]').val(),
+		  statement_recurring_custom_invoice_sequencing: $(statementForm).find('[name="statement[recurring_profile_id]"]').val(),
+		  statement_recurring_start_date: $(statementForm).find('[name="statement[recurring_start_date]"]').attr('data-real-date'),
+		  statement_recurring_frequency_number: $(statementForm).find('[name="statement[recurring_custom_frequency_amount]"]').is(':visible') ? $(statementForm).find('[name="statement[recurring_custom_frequency_amount]"]').val() : $(statementForm).find('[name="statement[recurring_frequency]"] option:selected').attr('data-amount'),
+		  statement_recurring_frequency_type: $(statementForm).find('[name="statement[recurring_custom_frequency_unit]"]').is(':visible') ? $(statementForm).find('[name="statement[recurring_custom_frequency_unit]"]').val() : $(statementForm).find('[name="statement[recurring_frequency]"] option:selected').attr('data-unit'),
+		  statement_recurring_total_occurences: $(statementForm).find('[name="statement[recurring_occurrences]"]').val(),
+		  statement_recurring_due_after: $(statementForm).find('[name="statement[due_days]"]').is(':visible') ? parseInt($(statementForm).find('[name="statement[due_days]"]').val()) : parseInt($(statementForm).find('[name="statement[due]"]').val()),
+		  /* recurring settings here */
+		  
+		  pricing_items: [],
+		  
+		  //line_items_order: $(this).find('[name="statement[item_order]"]').val(),
+		  line_items: [],
+	};
+			
+	/* payment methods */
+	$(statementForm).find('[name="statement[payment_method]"]').each(function() {
+		if ($(this).prop('checked')) {
+			postData.payment_options.push($(this).val());
+		}
+	});
+	/* payment methods */
+	
+	/* total TDS */
+	$(statementForm).find('.statement_amount_container.tds').each(function() {
+		
+		var TDStype = $(this).attr('data-tds-type');
+		var TDSname = $(this).find('input.tds_name').val() ? $(this).find('input.tds_name').val() : $(this).find('select option:selected').attr('data-name');
+		var TDSrate = $(this).find('input.tds_rate').val() ? $(this).find('input.tds_rate').val() : $(this).find('select option:selected').attr('data-rate');
+				
+		if ($(this).find('input[type="checkbox"]:checked').is(':visible')) {
+		saveCategory(TDStype, TDSname, TDSrate);	
+		}
+				
+		var totalTDSarray = {
+			item_type: TDStype,
+			item_name: TDSname,
+			amount: TDSrate,
+		};
+		
+		postData.pricing_items.push(totalTDSarray);
+				
+	});
+	/* total TDS */
+			
+	$(statementForm).find('.one_item_line.actual').each(function() {
+				
+		var thisLineItem = $(this);
+		var lineItemType = $(this).attr('data-type');
+	
+		var itemUnit;
+		
+		if ($(this).find('[name="statement[item_custom_unit]"]').is(':visible')) {
+		itemUnit = $(this).find('[name="statement[item_custom_unit]"]').val();
+		} else {
+		itemUnit = $(this).find('[name="statement[item_unit]"]').val();
+		}
+		
+		var lineItemQuantity;
+		
+		if (lineItemType === 'time') {
+		// divide data-tota-minutes by 60 to get decimal hour value
+		lineItemQuantity = (thisLineItem.find('[name="statement[item_quantity]"]').attr('data-total-minutes') / 60);
+		} else if (lineItemType === 'expense') {
+		// quantity always 1 for expenses
+		lineItemQuantity = 1;
+		} else {
+		lineItemQuantity = parseFloat($(this).find('[name="statement[item_quantity]"]').val());
+		}
+		
+		var lineItem = {
+			//item_id: $(this).attr('data-id'),
+			line_item_type: lineItemType,
+			line_item_description: $(this).find('[name="statement[item_name_description]"]').val(),
+			line_item_quantity: lineItemQuantity,
+			line_item_unit_price: lineItemType === 'expense' ? $(this).find('[name="statement[item_amount]"]').val() : parseFloat($(this).find('[name="statement[item_rate]"]').val()),
+			line_item_unit: itemUnit,
+			//item_total: $(this).find('[name="statement[item_amount]"]').val(),
+			line_item_date: $(this).find('.tag.date .filename').attr('data-real-date'),
+			pricing_items: [],
+			object_links : {
+				files: [],
+				tags: [],	
+			},
+		};
+		
+		/* item files */
+		$(this).find('[data-file-id]').each(function() {
+			if (!$(this).attr('data-file-id')) {
+			return true;	
+			}
+			lineItem.object_links.files.push($(this).attr('data-file-id'));
+		});
+		/* item files */
+		
+		/* item tags */
+		$(this).find('.tag.classic').each(function() {
+			lineItem.object_links.tags.push($(this).find('[data-tag-info="name"]').val());
+		});
+		/* item tags */
+		
+		/* item TDS */
+		$(this).find('.tag.tds').each(function() {
+			
+			var tdsType = $(this).attr('data-tag-type');
+			
+			var pricingItem = {
+				item_type: tdsType,
+				item_name: $(this).find('[data-tag-info="name"]').val(),
+				amount: $(this).find('[data-tag-info="rate"]').val(),
+			};
+			lineItem.pricing_items.push(pricingItem);
+			
+		});
+		/* item TDS */
+		
+		postData.line_items.push(lineItem);		
+		
+	});
+	
+	var postDataJSON = JSON.stringify(postData);
+	
+	console.log(postDataJSON);
+	
+	$.ajax({	
+		type: "POST",
+		url: '/php/ajax_handler.php?endpoint='+handlerEndpoint+'&action_type='+handlerAction+'&object_id='+dataObjectID,
+		data: ({ postArray: postDataJSON }),	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(data){
+			
+			/* remove loading */
+			loadingItem.removeClass('loading');
+				
+			if (data.success == 1) {
+				
+				/* if user converts estimate to invoice */
+				if ($('[name="post_statement_creation_action"]').val() === 'mark_estimate_as_invoiced') {
+				ajaxHandlerAction(null, 'mark-estimate-invoiced', $('[name="post_statement_creation_action_value"]').val());
+				}
+				/* if user converts estimate to invoice */
+				
+				/* if user converts tracker(s) to invoice */
+				if ($('[name="post_statement_creation_action"]').val() === 'mark_trackers_as_billed') {
+				ajaxHandlerAction(null, 'mark-trackers-billed', $('[name="post_statement_creation_action_value"]').val());
+				}
+				/* if user converts tracker(s) to invoice */
+				
+				if (handlerAction === 'create') {
+				
+					if (submitAction === 'save_send') {
+					redirectPath = '/'+redirectPathElement+'/'+data.message.statement_hash+'/send';
+					} else {
+					redirectPath = '/'+redirectPathElement+'/'+data.message.statement_hash;
+					}
+					
+				goToPage(redirectPath, redirectFile, redirectPage, redirectType, data.message.statement_hash, false, successMessage, null);
+				
+				} else if (handlerAction === 'edit') {
+					
+				goToPage('/'+redirectPathElement+'/'+dataObjectID, redirectFile, redirectPage, redirectType, dataObjectID, false, successMessage, null);
+				
+				}
+			
+				
+			} else {
+			generalInfo('show', 'error', translateError(data.message));
+			}
+				
+			
+		},
+	});
+	
+});
+
+/* TIMER FOR TRACK TIME */
+$('body').on('click', '.start-timer', function() {
+	"use strict";
+	
+	var secondsToStartAt = $(this).closest('tr').find('td [data-timer="time"]').attr('data-timer-start');
+		
+	/* if timer is not running */
+	if ($(this).attr('data-timer') !== 'on') {
+				
+		$(this).attr('data-timer', 'on');
+		ajaxHandlerAction($(this), 'start-timer', null);
+		
+	/* if timer is running */
+	} else {
+		
+		$(this).attr('data-timer', 'off');
+		ajaxHandlerAction($(this), 'stop-timer', null);
+		
+	}
+	
+});
+
+/* STATEMENT SETTINGS - TO BCC EMAIL ADDRESSES */
+$('body').on('click', '.email_tags ul li', function() {
+	'use strict';
+	
+	var autocompleteValue = $(this).html().replace('(', '<').replace(')','>');
+	var inputContainer = $(this).closest('section').find('input[data-offline-autocomplete="on"]');
+	var inputValue = inputContainer.val();
+	
+	addEmailToInput(inputContainer, autocompleteValue);
+	
+});
+
+/* PUBLIC STATEMENT - MAKE PAYMENT - SWITCH ONPAGE PAYMENT METHODS */
+$('body').on('click', 'a[data-onpage-payment]', function() {
+	'use strict';
+		
+	var paymentType = $(this).attr('data-onpage-payment');
+		
+	// reset
+	$(this).closest('.board').find('div[data-onpage-payment]').hide();
+	
+	if (paymentType == 'reset') {
+
+		$(this).closest('.board').find('ul.statement_payment_methods a').removeClass('selected');
+		$(this).closest('.board').find('ul.statement_payment_methods a').show();
+		
+		$(this).closest('.board').find('.payments_made').show();
+
+	} else {
+		
+		$(this).addClass('selected');
+		
+		$(this).closest('.board').find('ul.statement_payment_methods a').hide();
+		$(this).show();
+
+		$(this).closest('.board').find('div[data-onpage-payment="'+paymentType+'"]').show();
+		
+		$(this).closest('.board').find('.payments_made').hide();
+
+		
+	}
+		
+	
+});
+
+
+/* PAYMENT INTEGRATIONS - ENABLE DISABLE SECTIONS */
+$('body').on('change', '#desk.payment_integrations input[type="checkbox"]', function() {
+	
+	$(this).closest('div.board').find('[data-payment-integration="details"]').toggle();
+	
+	if ($(this).prop('checked')) {
+	$(this).closest('div.board').find('[data-value-toggle="true"]').val(1);
+	} else {
+	$(this).closest('div.board').find('[data-value-toggle="true"]').val(0);
+	}
+	
+});
+
+
+/* EXTERNAL FUNCTION TO SAVE ITEM EXPENSE MILEAGE TIME */
+function saveCategory(categoryType, categoryName, categoryRate) {
+	'use strict';
+	
+	var dataHandlerEndpoint;
+
+	switch (categoryType) {
+	
+		case 'time':
+		dataHandlerEndpoint = 'task';
+		break;
+		
+		case 'expense':
+		dataHandlerEndpoint = 'expense';
+		break;
+		
+		case 'mileage':
+		dataHandlerEndpoint = 'trip';
+		break;
+	
+		case 'tag':
+		dataHandlerEndpoint = 'tag';
+		break;
+	
+		case 'tax':
+		dataHandlerEndpoint = 'tax';
+		break;
+	
+		case 'discount':
+		dataHandlerEndpoint = 'discount';
+		break;	
+			
+		case 'shipping':
+		dataHandlerEndpoint = 'shipping';
+		break;		
+	
+	}
+	
+	var postData = {
+		name: categoryName,
+		rate: categoryRate == 0 ? '' : categoryRate, 
+	};
+	
+	var postDataJSON = JSON.stringify(postData);
+	//console.log(postDataJSON);	
+	
+	$.ajax({	
+		type: "POST",
+		url: '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type=create',
+		data: ({ postArray: postDataJSON }),	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		}, success: function(data){
+			//console.log('item added');
+		}
+	
+	});
+		
+}
+
+
+/* REFRESH TRACK ENTRY TIME */
+function refreshTrackTime() {
+	
+	$.ajax({	
+		type: 'GET',
+		url: '/php/ajax_handler.php?action_type=get&endpoint=tracker',
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		}, success: function(data){
+		
+			$.each(data, function(number) {
+		
+				var trackerID = data[number].tracker_id;
+				var trackerStatus = data[number].tracker_status;
+				var trackerAmountMinutes = data[number].tracker_amount;
+		
+				if (trackerStatus === 1) {
+					
+				var trackerAmountFormattedArray = MinsToHrsMins(trackerAmountMinutes);
+				
+				$('[data-item-id="'+trackerID+'"]').closest('tr').find('.tracker_amount').html(trackerAmountFormattedArray[0]+':'+trackerAmountFormattedArray[1]);
+				
+				} else {
+				return true;
+				}
+			
+			});
+		
+		}
+	
+	});
+	
+}
+
+
+/* PERCENTAGE INPUT RESTRICTION */ 
+$(document).ready(function() {
+  "use strict";
+  $('body').on('keypress', '[data-input-restriction="percentage"]', function(event) {
+    // allow no more typing after first %
+    if (this.selectionStart > 0 && $(this).val().charAt(this.selectionStart - 1) === '%'){
+       event.preventDefault(); 
+    }
+    // Allow only backspace and delete
+    if (event.which == 46 && (($(this).val().split(".").length - 1) < 1) || event.which == 8 || event.which == 37) {
+      // continue
+    } else {
+      // Ensure that it is a number and stop the keypress
+      if (event.which < 48 || event.which > 57) {
+        event.preventDefault(); 
+      }   
+    }
+  });
+  $('body').on('keyup', '[data-input-restriction="percentage"]', function() {
+		
+	var inputValue = $(this).val();
+	
+	if ((inputValue.split("%").length - 1) > 1 || (inputValue.split(".").length - 1) > 1 || (inputValue.split("%").length - 1) < 1 && !$.isNumeric(inputValue)) {
+		$(this).addClass('error');
+	} else {
+		$(this).removeClass('error');
+	}
+		
+  });
+  $('body').on('blur', '[data-input-restriction="percentage"]', function() {
+		
+	var inputValue = $(this).val();
+	
+	if ((inputValue.split("%").length - 1) > 1 || (inputValue.split(".").length - 1) > 1 || (inputValue.split("%").length - 1) < 1 && !$.isNumeric(inputValue)) {
+		$(this).val('0.00');
+		$(this).removeClass('error');
+		
+		if (isPrivateStatementPage($('input[name="current_page"]').val())) { 
+		makeCalculation();
+		}
+	} 	
+  });
+  
+});
+
+
+/* NUMBER INPUT RESTRICTION
+$(document).ready(function() {
+	"use strict";
+  $('body').on('keypress', '[data-input-restriction="number"]', function(event) {
+  		if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57)) {
+    	event.preventDefault();
+  		}
+  });
+  $('body').on('keyup', '[data-input-restriction="number"]', function() {
+		
+	var inputValue = $(this).val();
+	
+	if ((inputValue.split(".").length - 1) > 1 || !$.isNumeric(inputValue)) {
+		$(this).addClass('error');
+	} else {
+		$(this).removeClass('error');
+	}
+		
+  });
+  $('body').on('blur', '[data-input-restriction="number"]', function() {
+		
+	var inputValue = $(this).val();
+	
+	if ((inputValue.split(".").length - 1) > 1 || !$.isNumeric(inputValue)) {
+		
+		var zero = 0;
+		
+		if($(this).attr('data-calculation') === 'quantity') {
+			$(this).val('0');
+		} else {
+			$(this).val(zero.toFixed(2));
+		}
+			
+		$(this).removeClass('error');
+		
+		if (isPrivateStatementPage($('input[name="current_page"]').val())) { 
+		makeCalculation();
+		}
+	
+	} 
+		
+  });
+  
+});
+*/
+
+
+/* TIME INPUT RESTRICTION */
+$(document).ready(function() {
+	"use strict";
+    /*$('body').on('keypress', '[data-input-restriction="time"]', function(event) {
+        // Allow only backspace and delete
+        if (event.which == 8 || event.which == 58) {
+			// allow no more typing after first ":"
+			if(($(this).val().toString().split(":").length - 1) > 0) {
+          	      event.preventDefault(); 
+			}
+			
+        } else {
+            // Ensure that it is a number and stop the keypress
+            if (event.which < 48 || event.which > 57) {
+                event.preventDefault(); 
+            }   
+        }
+		
+    });*/
+    $('body').on('blur', '[data-input-restriction="time"]', function() {
+		
+		var timeInput = $(this).val();
+		
+		if (timeInput) {
+			
+			/* if time input with ":" */
+			if (timeInput.indexOf(':') > -1) {
+				
+				var timeSplitArr = timeInput.split(':');
+				var hours = timeSplitArr[0];
+				var minutes = timeSplitArr[1];
+				
+					var totalminutes = parseInt(hours) * 60 + parseInt(minutes);
+										
+					var resultTimeArray = MinsToHrsMins(totalminutes);
+								
+					// save total minutes in data attribute for form submissions etc. 
+					$(this).attr('data-total-minutes', totalminutes);
+				
+					$(this).val(resultTimeArray[0] + ':' + resultTimeArray[1]);
+								
+			} else if(!isNaN(timeInput)) {
+			/* if no time input with ":" but valid number */
+		
+				$(this).val(decimalToHrsMins(timeInput));
+			
+				// save total minutes in data attribute for form submissions etc. 
+				$(this).attr('data-total-minutes', timeInput * 60);
+		
+			} else {
+			/* if invalid input */
+		
+				$(this).val('00:00');
+				$(this).attr('data-total-minutes', 0);
+			
+			}
+			
+		} else {
+			
+			$(this).val('00:00');
+			$(this).attr('data-total-minutes', 0);
+			
+		}
+		
+		makeCalculation();
+		
+	});
+});
+
+
+/* SECONDS TO HRS:MINS */
+function MinsToHrsMins(mins) {
+	var hours = Math.floor(mins / 60);
+	
+	if (hours < 10) {
+	hours = '0' + hours;	
+	}
+	
+	var minutes = "0" + (mins - hours * 60);
+	return [hours, minutes.substr(-2)];
+}
+
+
+/* DECIMAL NUMBERS TO HRS:MINS */
+function decimalToHrsMins(decimal) {
+	return (function(i) {
+		
+		var hourValue = i;
+		var minuteValue = (Math.round(((decimal-i) * 60), 10));
+		
+		if (hourValue < 10) {
+		hourValue = '0' + hourValue;	
+		}
+		
+		if (minuteValue === 0) {
+		minuteValue = '00';	
+		}
+		
+		return hourValue + ':' + (minuteValue);
+		})(parseInt(decimal));
+}
+
+
+
+/* PUBLIC PAYMENT AJAX FUNCTION - optimise! - move to scripts.public */
+$('body').on('click', '[data-make-payment="true"]', function() {
+	
+	var paymentType = $(this).attr('data-payment-type') === 'credit_card' ? 'credit_card' : 'not_credit_card';
+	
+	var that = $(this);
+	
+	$(this).addClass('loading');
+	$(this).find('li').addClass('loading');
+	
+	var paymentPostData;
+	
+	var dataProviderID;
+	var paymentCurrency = $('[name="payment_currency"]').val();
+	var paymentAmount = $('[name="payment_amount"]').val();
+	var statementHash = $('[name="current_id"]').val();
+	
+	if (paymentType === 'credit_card') {
+		
+	$('[form="'+$(this).attr('id')+'"]').addClass('loading');
+		
+	/* credit card payment */
+	dataProviderID = $('[data-onpage-payment="credit_card"]').attr('data-provider-id');	
+	
+	var paymentPostDataRaw = {
+		gateway: dataProviderID,
+		currency: paymentCurrency,
+		amount: paymentAmount,
+		statement_hash: statementHash,
+		customer_ip_address: $(this).closest('form').find('[name="public_invoice_payment[customer_ip]"]').val(),
+		customer_name: $(this).closest('form').find('[name="public_invoice_payment[customer_first_name]"]').val() + ' ' + $(this).closest('form').find('[name="public_invoice_payment[customer_last_name]"]').val(),
+		customer_email: $(this).closest('form').find('[name="public_invoice_payment[customer_email_address]"]').val(),
+		customer_address: $(this).closest('form').find('[name="public_invoice_payment[customer_address]"]').val(),
+		customer_city: $(this).closest('form').find('[name="public_invoice_payment[customer_city]"]').val(),
+		customer_state: $(this).closest('form').find('[name="public_invoice_payment[customer_state]"]').val(),
+		customer_postal_code: $(this).closest('form').find('[name="public_invoice_payment[customer_zip]"]').val(),
+		customer_country: $(this).closest('form').find('[name="public_invoice_payment[customer_country_code]"]').val(),
+		cc_number: $(this).closest('form').find('[name="public_invoice_payment[credit_card_number]"]').val(),
+		cc_expiry: $(this).closest('form').find('[name="public_invoice_payment[credit_card_expiration_month]"]').val() + '/' + $(this).closest('form').find('[name="public_invoice_payment[credit_card_expiration_year]"]').val(),
+		cc_cvv: $(this).closest('form').find('[name="public_invoice_payment[credit_card_cvv]"]').val(),
+		cc_name: $(this).closest('form').find('[name="public_invoice_payment[credit_card_cardholder]"]').val(),
+	};
+	
+	var paymentPostData = JSON.stringify(paymentPostDataRaw);
+	/* credit card payment */
+	} else {
+	/* 3rd party payment */
+	dataProviderID = $(this).attr('data-provider-id');	
+	paymentPostData = '{"gateway":"'+dataProviderID+'", "currency":"'+paymentCurrency+'", "amount":"'+paymentAmount+'", "statement_hash":"'+statementHash+'"}';
+	/* 3rd party payment */
+	}
+	
+	console.log(paymentPostData);
+		
+	$.ajax({	
+		type: 'POST',
+		url: '/php/ajax_handler.php?endpoint=invoicepayment&action_type=create',	
+		data: ({ postArray: paymentPostData }),	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(data) {
+				
+			if (data.success == 1) {
+				
+				that.removeClass('loading');
+				that.find('li').removeClass('loading');
+				
+				if (data.message.redirect_url) {
+				window.location.href = data.message.redirect_url;
+				return false;
+				} else if (paymentType === 'credit_card') {
+				window.location.href = window.location.href + '&paymentcomplete=1';
+				return false;
+				}
+				
+			} else {
+				that.removeClass('loading');
+				that.find('li').removeClass('loading');
+				generalInfo('show', 'error', translateError(data.message));
+			}
+					
+		}
+
+	});		
+	
+	
+});
+
+/* INVOICEABLE ANNOUNCEMENT */
+$('body').on('click', '[data-action="toggle_announcement"]', function() {
+	$('.announcement_content').slideToggle(100);
+	generalInfo('hide');		
+	$('.announcement_content .error').removeClass('error');	
+	
+	if ($(this).attr('data-finished') !== 'true') {
+	$('.announcement_header a').toggleText('Start Import', 'Import Later');
+	}
+});
+
+
+function newOrEditClient() {
+		
+	var button = $('[data-new-or-edit]');
+	var connectionType = button.attr('data-new-or-edit');
+		
+	if ($.isNumeric ($('body').find('[name="client_id"]').val())) {
+		button.attr('data-popup-id', 'edit_'+connectionType);
+		button.html('Edit ' + ucFirst(connectionType))
+	} else {
+		button.attr('data-popup-id', 'new_'+connectionType);
+		button.html('New ' + ucFirst(connectionType))
+	}
+	
+}
+
+
+/* RENDER MAIN HIGHCHART */ 
+function mainHighchart(dataType, periodFrom, periodTo) {
+	"use strict";
+			
+	if ($('#main-chart').length == 0) {
+	/* optimise this --> mainHighchart should not be called in these cases in the first place */
+	return false;	
+	}
+	
+	var dataHandlerAdditionalParameters = '{"graphs_only":1,"no_cache":1}';
+	
+	var dataTypeName;
+	var postDataJSON;
+	var goToPageArray;
+	
+	var doubleGraph;
+	
+	switch (dataType) {
+	
+		case 'invoiced':
+		dataTypeName = 'invoice_total';
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"'+dataTypeName+'","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		goToPageArray = ['/reports/invoices/'+periodFrom+'/'+periodTo+'/all_currencies/all_statuses/all_connections', 'reports', 'reports', null, null, false, null, '&report_type=invoices&report_period=custom&report_period_from='+periodFrom+'&report_period_to='+periodTo+'&report_currency=all_currencies&report_statement_status=all_statuses&report_client_type=all_connections'];
+		break;
+	
+		case 'estimates':
+		dataTypeName = 'estimate_total';
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"'+dataTypeName+'","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		goToPageArray = ['/reports/estimates/'+periodFrom+'/'+periodTo+'/all_currencies/all_statuses/all_connections', 'reports', 'reports', null, null, false, null, '&report_type=estimates&report_period=custom&report_period_from='+periodFrom+'&report_period_to='+periodTo+'&report_currency=all_currencies&report_statement_status=all_statuses&report_client_type=all_connections'];
+		break;
+		
+		/*case 'outstanding':
+		dataTypeName = 'invoice_total_due';
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"'+dataTypeName+'","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		break;*/
+		
+		case 'received':
+		dataTypeName = 'payments_received_total';
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"'+dataTypeName+'","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		goToPageArray = ['/reports/payments/'+periodFrom+'/'+periodTo+'/all_currencies/all_statuses/all_connections', 'reports', 'reports', null, null, false, null, '&report_type=payments&report_period=custom&report_period_from='+periodFrom+'&report_period_to='+periodTo+'&report_currency=all_currencies&report_statement_status=all_statuses&report_client_type=all_connections'];
+		break;
+		
+		/*case 'invoiced':
+		dataTypeName = 'invoice_total';
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"'+dataTypeName+'","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		break;*/
+		
+		case 'income_expenditure':
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"bill_total","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"},{"name":"graph2","type":"invoice_total","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		goToPageArray = ['/reports', 'reports', 'reports', null, null, false, null, null];
+		doubleGraph = true;
+		break;
+		
+		case 'invoiced_received':
+		postDataJSON = '{ "graphs": [{"name":"graph","type":"invoice_total","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"},{"name":"graph2","type":"payments_received_total","grouping":"","start_date":"'+periodFrom+'","end_date":"'+periodTo+'"}]}';
+		goToPageArray = ['/reports', 'reports', 'reports', null, null, false, null, null];
+		doubleGraph = true;
+		break;
+		
+	}
+			
+	//console.log(postDataJSON);
+
+	$.ajax({	
+		type: "POST",
+		url: '/php/ajax_handler.php?endpoint=stats&action_type=create',
+		data: ({ postArray: postDataJSON, additional_parameters: dataHandlerAdditionalParameters }),	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(data){
+												
+			if (data.success === 1) {
+				
+				/*$.each(data.message.graphs,function(key, value) {
+					alert('');
+				});*/
+				
+				var categoriesArray = [];
+				var seriesArray = [];
+				var seriesArray2 = [];
+				
+				$.each(data.message.graphs.graph,function(key, value) {
+  					categoriesArray.push(key);
+  					seriesArray.push(value);
+				});
+				
+				/* OPTIMISE THIS! */
+				if (doubleGraph === true) {
+				
+				$.each(data.message.graphs.graph2,function(key, value) {
+  					seriesArray2.push(value);
+				});
+				
+				}
+				
+				var chartSeries;
+				var extraLabel = '';
+				
+				switch (dataType) {
+				
+					case 'income_expenditure':
+					chartSeries = [
+						{
+            			name: 'Expenses',
+            			data: seriesArray,
+            			color: '#e35256',
+						},
+						{
+            			name: 'Invoiced',
+            			data: seriesArray2,
+            			color: '#3da07b',
+						},
+					];
+					extraLabel = ' '+data.message.currency+' ';
+					break;
+					
+					case 'invoiced_received':
+					chartSeries = [
+						{
+            			name: 'Invoiced',
+            			data: seriesArray,
+            			color: '#' + $('[name="ccfg_main_secondary"]').val(),
+						},
+						{
+            			name: 'Received',
+            			data: seriesArray2,
+            			color: '#3da07b',
+						},
+					];
+					extraLabel = ' '+data.message.currency+' ';
+					break;
+					
+					default:
+					chartSeries = [
+						{
+            			name: data.message.currency,
+            			data: seriesArray,
+            			color: '#' + $('[name="ccfg_main_secondary"]').val(),
+						}
+					];
+					break;
+					
+				}
+																															
+				var chart = new Highcharts.Chart({
+        			chart: {
+        			renderTo: 'main-chart',
+					type: 'column',
+            		height: 300,
+        		},
+        		credits: {
+            		enabled: false
+        		},
+        		legend: {
+            		enabled: false
+        		},
+        		exporting: {
+            		enabled: false
+        		},
+        		title:{
+    				text:''
+				},
+        		yAxis: [{
+					opposite: true,
+            		title: '',
+            		labels: {
+              			align: 'left',
+            		}
+            	}],
+        		xAxis: {
+            		categories: categoriesArray
+        		},
+        		plotOptions: {
+            		series: {
+                	cursor: 'pointer',
+                	point: {
+                    	events: {
+                        	click: function () {
+					    	/* switch type */
+							if (goToPageArray) {
+							goToPage(goToPageArray[0], goToPageArray[1], goToPageArray[2], goToPageArray[3], goToPageArray[4], goToPageArray[5], goToPageArray[6], goToPageArray[7]);
+							}
+							}
+                    	}
+                	}
+            	}
+        		},
+        		series: chartSeries,
+				tooltip: {
+                backgroundColor: 'none',
+                borderWidth: 0,
+                shadow: false,
+                useHTML: true,
+                padding: 0,
+            	formatter: function() {
+                
+				var s = [];
+                
+                $.each(this.points, function(i, point) {
+					//<strong>'+ point.series.name +'</strong>
+                    s.push(point.series.name+extraLabel+' '+formatNumber(point.y, parseInt($('[name="current_number_format"]').val()), parseInt($('[name="current_number_precision"]').val())));
+                });
+                
+                return '<div class="graph_tooltip_new">' + s.join('<br>') + '</div>';
+            	},
+            	shared: true,
+				positioner: function (labelWidth, labelHeight, point) {
+					var tooltipX, tooltipY;
+					if (point.plotX + chart.plotLeft < labelWidth && point.plotY + labelHeight > chart.plotHeight) {
+							tooltipX = chart.plotLeft;
+							tooltipY = chart.plotTop + chart.plotHeight - 2 * labelHeight - 10;
+					} else {
+							tooltipX = chart.plotLeft;
+							tooltipY = chart.plotTop + chart.plotHeight - labelHeight;
+					}
+					return {
+						x: tooltipX,
+						y: tooltipY
+					};
+				}
+            	},
+
+    		});
+				
+			}  else {
+			//alert(data.message);
+			}
+						
+		}
+		
+	});
+							
+		
+}
+
+
+/* DASHBOARD - CHANGE MAIN GRAPH PARAMETERS */
+$('body').on('submit', '[name="graph_params"]', function(event) {
+	'use strict';
+	event.preventDefault();
+		
+	var reportType = $(this).find('select[name="report_type"]').val();
+	var reportName;
+	
+	switch (reportType) {
+	
+		case 'invoiced':
+		reportName = 'Invoiced Total';
+		break;
+		
+		case 'estimates':
+		reportName = 'Estimate Total';
+		break;
+		
+		case 'received':
+		reportName = 'Payments Received';
+		break;
+		
+		case 'income_expenditure':
+		reportName = 'Invoiced / Expenses';
+		break;
+		
+		case 'invoiced_received':
+		reportName = 'Invoiced / Received';
+		break;
+		
+	}
+	
+	var periodFrom;
+	var periodTo;
+	
+	var periodFromFormatted;
+	var periodToFormatted;
+		
+	if ($(this).find('select[name="period"]').val() !== 'custom') {
+	periodFrom = $(this).find('select[name="period"] option:selected').attr('data-period-start');
+	periodTo = $(this).find('select[name="period"] option:selected').attr('data-period-end');
+	periodFromFormatted = $(this).find('select[name="period"] option:selected').attr('data-period-start-formatted');
+	periodToFormatted = $(this).find('select[name="period"] option:selected').attr('data-period-end-formatted');
+	} else {
+	periodFrom = $(this).find('input[name="period_from"]').attr('data-real-date');
+	periodTo = $(this).find('input[name="period_to"]').attr('data-real-date');
+	periodFromFormatted = $(this).find('input[name="period_from"]').val();
+	periodToFormatted = $(this).find('input[name="period_to"]').val();
+	}
+	
+	//var graphType = $(this).find('select[name="period"] option:selected').val();
+	
+	mainHighchart(reportType, periodFrom, periodTo);
+	
+	$(this).closest('.board.chart').find('.box_header [data-chart-box-heading="true"]').html(reportName+' ('+periodFromFormatted+' - '+periodToFormatted+')');
+	
+	/* save settings to cookie */
+	var graphSettingsArray = {
+		graphType: reportType,
+		graphDisplayName: reportName,
+		graphSelectedPeriod: $(this).find('select[name="period"]').val(),
+		graphCustomPeriodFrom: periodFrom,
+		graphCustomPeriodTo: periodTo,
+		graphCustomPeriodFromFormatted: periodFromFormatted,
+		graphCustomPeriodToFormatted: periodToFormatted,
+	};
+	
+	localStorage.setItem(portalName+'_graph_settings', JSON.stringify(graphSettingsArray));
+	
+		
+});
+
+
+/* RENDER SECONDARY PIE CHART */
+function secondaryPieChart(numberReceived, numberOutstanding) {
+	"use strict";
+	
+		/* format numbers according to current config */	
+		var formattedNumberReceived = formatNumber(numberReceived, parseInt($('[name="current_number_format"]').val()), parseInt($('[name="current_number_precision"]').val()));
+		var formattedNumberOutstanding = formatNumber(numberOutstanding, parseInt($('[name="current_number_format"]').val()), parseInt($('[name="current_number_precision"]').val()));
+
+		var chart = new Highcharts.Chart({
+            chart: {
+        	renderTo: 'pie-chart',
+				type: 'pie',
+            	spacingLeft: -10
+            },
+            title: {
+                text: ''
+            },
+            yAxis: {
+                title: {
+                    text: ''
+                }
+            },
+        	credits: {
+            	enabled: false
+        	},
+        	legend: {
+           		enabled: false
+        	},
+        	exporting: {
+         	   enabled: false
+       	 	},
+        	plotOptions: {
+                series: {
+                    shadow: false,
+                    cursor: 'pointer',
+                    point: {
+                        events: {
+                            click: function () {
+							var subPath;
+														
+							switch (this.name) {
+							
+								case 'Received':
+					    		goToPage('/reports/payments/'+currentYear+'-01-01/'+getTodaysDate()+'/all_currencies/all_statuses/all_connections', 'reports', 'reports', null, null, false, null, '&report_type=payments&report_period=custom&report_period_from='+currentYear+'-01-01&report_period_to='+getTodaysDate()+'&report_currency=all_currencies&report_statement_status=all_statuses&report_client_type=all_connections');
+								break;
+								
+								case 'Outstanding':
+					    		goToPage('/reports', 'reports', 'reports', null, currentYear+'-01-01;'+getTodaysDate(), false, null, null);
+								break;
+								
+							}
+                        }
+                    }
+                }
+            }
+            },
+            tooltip: {
+                formatter: function() {
+					
+					var labelValue;
+					
+					switch (this.point.name) {
+					
+						case 'Received':
+						labelValue = formattedNumberReceived;
+						break;
+					
+						case 'Outstanding':
+						labelValue = formattedNumberOutstanding;
+						break;
+					
+					}
+					
+                    return '<span class="tooltip_item"><b>'+ this.point.name +':</b> '+$('[name="current_currency"]').val()+ ' ' + labelValue+'</span>';
+					
+                }
+            },
+            series: [{
+                name: 'Name',
+                data: [["Received", parseFloat(numberReceived)],["Outstanding", parseFloat(numberOutstanding)]],
+                size: '95%',
+                innerSize: '50%',
+				colors: ['#3da07b', '#e35256'],
+                showInLegend:true,
+                dataLabels: {
+                    enabled: false
+                }
+            }]
+        });
+}
+
+
+/* DASHBOARD COMPARISON CHART */
+function dashboardComparisonChart(IncomeArray, ExpenditureArray) {
+	"use strict";
+	
+		var monthsInYear = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+				
+		var financialYear = [];
+				
+		var financialYearString = $('[name="fiscal_year_start"]').val().split('-');
+		var financialYearSetting = parseInt(financialYearString[1]) - 1;
+				
+		for (var i = financialYearSetting; i < (12 + financialYearSetting) ; i++) {
+            //console.log(i % monthsInYear.length);
+			financialYear.push(monthsInYear[i % monthsInYear.length]);
+        }
+		
+		//console.log(financialYear);
+
+		var chart = new Highcharts.Chart({
+            chart: {
+        	renderTo: 'comparison-chart',
+            },
+            title: {
+                text: ''
+            },
+        	credits: {
+            	enabled: false
+        	},
+        	legend: {
+           		enabled: true,
+            	layout: 'horizontal',
+           	 	backgroundColor: '#FFFFFF',
+          	 	align: 'right',
+            	verticalAlign: 'top',
+            	floating: true,        
+			},
+        	 exporting: {
+         	   enabled: false
+       	 	},
+        	plotOptions: {
+                series: {
+                    shadow: false,
+                    cursor: 'pointer',
+                    point: {
+                        events: {
+                            click: function () {
+					    	goToPage('/reports', 'reports', 'reports', null, currentYear+'-01-01;'+getTodaysDate(), false, null, null);
+                        }
+                    }
+                }
+            }
+            },
+            tooltip: {
+                backgroundColor: 'none',
+                borderWidth: 0,
+                shadow: false,
+                useHTML: true,
+                padding: 0,
+            	formatter: function() {
+                var s = [];
+                
+                $.each(this.points, function(i, point) {
+					//<strong>'+ point.series.name +'</strong>
+                    s.push('<span class="tooltip_item '+point.series.name+'">'+$('[name="current_currency"]').val()+' '+formatNumber(point.y, parseInt($('[name="current_number_format"]').val()), parseInt($('[name="current_number_precision"]').val())) +'</span>');
+                });
+                
+                return s.join('');
+            	},
+            	shared: true,
+                positioner: function () {
+                    return { x: 10, y: 10 };
+                }
+            },
+        	xAxis: {
+            	title: {
+            	    text: ''
+           		},
+            	categories: financialYear,
+        	},
+        	yAxis: {
+				gridLineWidth: 0,
+                minorGridLineWidth: 0,
+				title: {
+                	text: ''
+            	},
+				labels: {
+ 					enabled: false
+				},
+            	plotLines: [{
+                	value: 0,
+                	width: 1,
+            	}]
+        		},
+        		series: [{
+            		name: 'Invoiced',
+					color: '#3da07b',
+					lineWidth: 3,
+            		data: IncomeArray,
+					marker: {
+                    	enabled: false
+                	}
+        			}, {
+           	 		name: 'Expenses',
+    				type: 'column',
+            		color: '#e35256',
+					lineWidth: 3,
+					data: ExpenditureArray,
+					marker: {
+                    	enabled: false
+                	}
+        		}]
+        });
+}
+
+
+/* INITALIZE AD BANNERS */
+function fireAds(id) {
+	
+	switch (id) {
+	
+		case 'eversign_launch_banner':
+		
+			if (!$('html').hasClass('public')) {
+		
+				if (localStorage.getItem('hide_eversign_graph') != 1) {
+					
+					$('body').find('.in_app_ad_top.eversign_initial_promo_banner').show();
+					
+					$('body').find('main').css('padding-top', '40px');
+					$('body').find('nav').css('padding-top', '40px');
+					$('body').find('.app_board_header').css('margin-top', '40px');
+					
+				}
+				
+				$('body').find('.in_app_ad_top.eversign_initial_promo_banner .close_ad').click(function() {
+					
+					$('body').find('.in_app_ad_top.eversign_initial_promo_banner').hide();
+					
+					$('body').find('main').css('padding-top', '0');
+					$('body').find('nav').css('padding-top', '0');
+					$('body').find('.app_board_header').css('margin-top', '0');
+					
+					localStorage.setItem('hide_eversign_graph', 1);
+					
+				});
+			
+			}
+		
+		break;	
+			
+	}
+	
+}
+
+
+
+

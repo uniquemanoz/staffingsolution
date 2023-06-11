@@ -1,0 +1,182 @@
+.sidebar_menu div.help {
+    position: absolute;
+    bottom: 0;
+    border: none;
+    clear: both;
+    width: 100%;
+}
+.sidebar_menu div.help a {
+	font-family: "pn-r", "Open Sans", "Gill Sans MT", "Gill Sans", Corbel, Arial, sans-serif;
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    padding: 11px 0 11px 40px;
+    height: 47px;
+    display: block;
+    text-decoration: none;
+    color: #fff;
+    white-space: nowrap;
+    line-height: 1.4;
+    font-size: 14px;
+	background: rgba(0,0,0,0.25);
+}
+.sidebar_menu div.help a:before {
+    font-family: 'Linearicons';
+    font-size: 20px;
+    margin-right: 10px;
+    margin-top: -3px;
+    vertical-align: middle;
+    display: inline-block;
+    font-weight: 400;
+    font-variant: normal;
+    text-transform: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-font-smoothing: grayscale;
+	content: "\e7ed";
+}
+.cp_prepare_document .sidebar_menu div.help a {
+	text-align: center;
+	padding-left: 0;
+}
+.cp_prepare_document .sidebar_menu div.help a:before {
+	margin-right: 0px;	
+}
+@media screen and (max-width: 1085px) and (min-width: 801px) {
+	.sidebar_menu div.help a {
+	    text-align: center;
+    	padding-left: 0;
+	}
+	.sidebar_menu div.help a:before {
+    	margin-right: 0px;	
+	}
+}
+#desk.checkout section.sub_heading {
+    background: #f5f5f5;
+    padding: 10px 20px !important;
+    font-size: 12px;
+}
+input[type="text"].error,
+input[type="email"].error,
+input[type="password"].error,
+input[type="search"].error,
+textarea.error,
+select.error {
+    background: #fce3e4!important;
+    border-color: #f3b9bb!important
+}
+#desk.settings select.error + .select_arrows:after {
+    background: #fce3e4!important;
+}
+.tiprtop.cvv .tipr_container_top {
+	margin-top: -110px;
+	margin-left: -118px;
+} 
+.saas_error {
+	display: block;
+    height: 100%;
+    width: 100%;
+    text-align: center;	
+	font-size: 16px;
+	padding-top: 20%;
+}
+html.public .saas_error {
+	background: #f2f2f2;	
+}
+.saas_error header {
+	font-size: 25px;
+	font-family: "pn-sb", "Open Sans", "Gill Sans MT", "Gill Sans", Corbel, Arial, sans-serif;
+}
+.saas_error header:before {
+    font-family: 'Linearicons';
+    font-size: 60px;
+    display: block;
+    font-weight: 400;
+    font-variant: normal;
+    text-transform: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-font-smoothing: grayscale;
+    content: "\e955";
+}
+.e_tooltip {
+	display: inline-block;
+    width: 10px;
+    height: 10px;
+    position: relative;	
+}
+.e_tooltip.margin_left {
+	margin-left: 9px;	
+}
+.e_tooltip.margin_right {
+	margin-right: 5px;	
+}
+.e_tooltip:before {
+    font-family: "pn-sb", "Open Sans", "Gill Sans MT", "Gill Sans", Corbel, Arial, sans-serif;
+    vertical-align: middle;
+    display: inline-block;
+    color: #fff;
+    border-radius: 999px;
+    height: 17px;
+    width: 17px;
+    text-align: center;
+    margin-top: -2px;
+    margin-left: -4px;
+    content: ' ';
+    background: url(../images/assets/e_tooltip_bg.svg);
+    background-size: 17px;
+}
+/* TOP AD BANNER */
+@media screen and (min-width: 751px) {
+html:not(.public) .in_app_ad_top {
+    width: 100%;
+    position: fixed;
+    top: 0;
+    z-index: 9;
+    font-family: pn-r;
+    font-size: 14px;
+}
+html:not(.public) .in_app_ad_top.eversign_initial_promo_banner {
+    display: block;
+    background: #3A3E42;
+    color: #ffffff;
+    margin: 0 auto;
+    margin-top: 0;
+    margin-bottom: 0;
+    width: 100%;
+    padding: 7px 20px;
+}
+html:not(.public) .in_app_ad_top.eversign_initial_promo_banner a {
+    color: #ffffff;
+}
+html:not(.public) .in_app_ad_top.eversign_initial_promo_banner .close_ad {
+    float: right;
+    display: inline-block;
+    line-height: 25px;
+    margin-left: 15px;
+}
+html:not(.public) .in_app_ad_top.eversign_initial_promo_banner .eversign_signup_button {
+    float: right;
+    background: #df7055;
+    border-color: #df7055;
+    color: #fff;
+    padding: 3px 5px;
+    border-radius: 2px;
+    font-size: 14px;
+}
+html:not(.public) .in_app_ad_top.eversign_initial_promo_banner .eversign_logo {
+    width: 100px;
+    margin-right: 25px;
+}
+html.public .in_app_ad_top {
+	display: none;
+}	
+}
+@media screen and (max-width: 750px) {
+.in_app_ad_top.eversign_initial_promo_banner {
+	display: none !important;
+}	
+main, nav {
+	padding-top: 0 !important;	
+}
+.app_board_header {
+	margin-top: 0 !important;	
+}
+}

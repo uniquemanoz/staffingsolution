@@ -1,0 +1,5079 @@
+/* INIT */
+var portalName = $('[name="portal_name"]').val();
+
+var currentPath;
+var currentFile = $('[name="data-ajax-get-file"]').val();
+var currentPage;
+var currentType;
+var currentID;
+var htmlTitle;
+var currentBusinessName;
+var currentDateFormat;
+
+var currentLanguage;
+
+var currentAdditionalParameters;
+
+var currentYear = new Date().getFullYear();
+
+var browserHistory = [];
+
+var dataTable;
+var dataTableAllRows;
+var dataTableAllRowsIDsArray = [];
+
+
+/* INITIAL PAGE LOAD */
+$(document).ready(function() {
+	"use strict";
+		
+	// prevent caching with ajax
+	$.ajaxSetup({ cache: false });
+	
+	init();
+	currentPath = window.location.pathname;
+	
+	browserHistory[0] = {
+			indexNo: 0,
+			pagePath: window.location.pathname,
+			getFile: $('[name="data-ajax-get-file"]').val(),
+			getPage: $('[name="data-ajax-get-page"]').val(),
+			getType: $('[name="data-ajax-get-type"]').val(),
+			getID: $('[name="data-ajax-get-id"]').val(),
+			getAdditionalParameters: $('[name="current_additional_parameters"]').val(),
+	};
+
+	//console.log(JSON.stringify(browserHistory));
+	
+});
+
+
+/* AJAX PAGE LOAD */
+function goToPage(pagePath, getFile, getPage, getType, getID, isBackOrForward, generalInfoArray, additionalParams) {
+	"use strict";
+				
+	var URL; 
+		
+	if (additionalParams) {
+	URL = '/pages/'+getFile+'.php?is_ajax=1&page='+getPage+'&type='+getType+'&id='+getID + additionalParams;
+	} else {
+	URL = '/pages/'+getFile+'.php?is_ajax=1&page='+getPage+'&type='+getType+'&id='+getID;
+	}
+	
+	$.ajax({	
+		type: 'GET',
+		url: URL,
+		dataType: "html",	
+		statusCode: {
+    		205: function() {
+        	window.location.href = '/login';
+			return false;
+    		}
+		},
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(data) {
+		
+			$('main').html(data);
+			
+			init();
+			
+			if (pagePath != window.location) {
+			
+				window.history.pushState({path:pagePath}, '', pagePath);
+							
+				/* only save this page to browser history if its not the back button AND if target page is not the last saved page */
+				if (isBackOrForward !== true && (browserHistory[browserHistory.length-1].pagePath !== pagePath)) {
+			
+					var indexNo = browserHistory.length;
+			
+					browserHistory[indexNo] = {
+					indexNo: indexNo,
+					pagePath: pagePath,
+					getFile: getFile,
+					getPage: getPage,
+					getType: getType,
+					getID: getID,
+					getAdditionalParameters: additionalParams
+					};
+										
+					/* refresh environment variables */
+					currentFile = getFile;
+					currentPath = pagePath;
+			
+				}
+			
+			}
+			
+			//console.log(JSON.stringify(browserHistory));
+			
+			// alert after page change
+			if (generalInfoArray) {
+			generalInfo(generalInfoArray[0], generalInfoArray[1], generalInfoArray[2]);
+			}
+			
+			return false;
+
+		}
+
+	});		
+	
+}
+
+
+/* REFRESH CURRENT PAGE */
+function reloadPage(generalInfoArray) {
+	'use strict';
+	goToPage(currentPath, currentFile, currentPage, currentType, currentID, true, generalInfoArray, currentAdditionalParameters);	
+}
+
+
+$('body').on('click', '[data-ajax="true"]', function (event) {
+		
+	"use strict";
+	event.preventDefault();
+	
+	/* fade out popover mobile menu */
+	if ($(window).width() < 800) {
+   	openCloseMobileMenu('close');
+	}
+		
+	var pagePath = $(this).attr('href');
+	
+    // Check "open in new window/tab" key modifiers
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+	window.open(pagePath, '_blank');
+	return false;
+	}
+		
+	var getFile = $(this).attr('data-ajax-get-file');
+	var getPage = $(this).attr('data-ajax-get-page');
+	var getType = $(this).attr('data-ajax-get-type');
+	var getID = $(this).attr('data-ajax-get-id');
+	
+	var getAdditionalParams = $(this).attr('data-ajax-get-parameters') ? $(this).attr('data-ajax-get-parameters') : null;
+	
+	/* respect last page additional parameters for onpage back button */
+	if ($(this).attr('data-ajax-is-onpage-back-button') && browserHistory.length > 1) {
+	
+	getAdditionalParams = browserHistory[browserHistory.length - 2].getAdditionalParameters;	
+	
+		// Note ID: #pn_1
+		// the if-clause (not the line in between) has been added as part of an eversign fix on Nov 28
+		// there was a bug related to the back button href being wrongly overriden by the pagePath = ... below 
+		if (!pagePath) {
+		pagePath = browserHistory[browserHistory.length - 2].pagePath;	
+		}
+		
+	}
+		
+	/* require confirmation for certain pages */
+	if (pageChangeConfirmation(getPage)) {
+								
+		// submit using unbind-bind due to some bug that submitted rom multiple times
+		$('body').find('form[name="page_change"]').unbind('submit').bind('submit', function(event) {
+													
+			event.preventDefault();
+								
+			closePopup();	
+			goToPage(pagePath, getFile, getPage, getType, getID, false, null, getAdditionalParams);
+				
+			return false;
+								
+		});
+			
+		return false;
+		
+	}
+	
+	goToPage(pagePath, getFile, getPage, getType, getID, false, null, getAdditionalParams);
+		
+});
+
+
+/* PAGE CHANGE CONFIRMATION */
+function pageChangeConfirmation(targetPage) {
+
+	// return true --> require confirmation
+	// return false --> do not require confirmation
+
+	switch (currentPage) {
+	
+		case 'checkout':
+
+			openConfirmationPopup('page_change', 'Do you want to leave this page?', 'Changes that you made may not be saved.', 'Yes');	
+			return true;
+		
+		break;
+		
+		case 'edit_document':
+		case 'edit_template':
+		
+			openConfirmationPopup('page_change', 'Do you want to leave this page?', 'Changes that you made may not be saved.', 'Yes');	
+			return true;
+		
+		break;
+	
+		case 'new_document':
+		case 'new_template':
+
+			/* check if any changes made */
+			var changesMade = false;
+			
+			// if at least one input/textarea filled 
+			$('body').find('input[type="text"]:visible, textarea:visible').each(function() {
+				
+				if ($(this).val()) {
+				changesMade = true;	
+				}
+				
+			});
+			
+			// if file uploaded
+			if ($('.files_area').find('.uploadifive-queue-item').length) {
+			changesMade = true;	
+			}
+	
+			// do not require confirmation
+			if (changesMade !== true) {
+			return false;
+			}
+
+			openConfirmationPopup('page_change', 'Do you want to leave this page?', 'Changes that you made may not be saved.', 'Yes');	
+			return true;
+		
+		break;
+		
+		case 'prepare_document':
+		case 'prepare_template':
+
+			/* check if any changes made */
+			var changesMade = false;
+			
+			if ($('section.window').find('.draggable.cloned').length) {
+			changesMade = true;
+			}
+	
+			// do not require confirmation
+			if (changesMade !== true) {
+			return false;
+			}
+
+			openConfirmationPopup('page_change', 'Do you want to leave this page?', 'Going back to the previous page without saving will discard any changes you have made and fields you have placed.', 'Yes');	
+			return true;
+		
+		break;
+				
+		default:
+		return false;
+		
+	}
+		
+}
+
+
+/* HANDLE BACK BUTTON */
+$(window).bind('popstate', function() {
+	"use strict";
+
+	var indexNo = browserHistory.length;
+	var indexNoBefore = indexNo - 2;
+		
+	if (indexNo > 1) {
+	
+		var pagePath = browserHistory[indexNoBefore].pagePath;
+		var getFile = browserHistory[indexNoBefore].getFile;
+		var getPage = browserHistory[indexNoBefore].getPage;
+		var getType = browserHistory[indexNoBefore].getType;
+		var getID = browserHistory[indexNoBefore].getID;
+		var getAdditionalParams = browserHistory[indexNoBefore].getAdditionalParameters;
+		
+		//console.log(getAdditionalParams);
+				
+		goToPage(pagePath, getFile, getPage, getType, getID, true, null, getAdditionalParams);
+		browserHistory = browserHistory.slice(0, -1);
+		
+	}
+	
+});
+
+
+/* FIRE DATATABLES PLUGIN */
+function fireDataTables() {
+		"use strict";
+		
+		var defaultOrder;
+		var ajaxURL;
+		
+		var enableFiltering;
+		var filterColumn;
+		
+		var strictSearchForEqualValue;
+		
+		// additional config
+		switch (currentPage) {
+				
+			case 'files':
+			// sort by upload date descrending
+			defaultOrder = [[ 1, "desc" ]];
+			ajaxURL = '/php/table_data.php?type=' + currentPage + '&id=' + currentID;
+			break;
+			
+			case 'invoices':
+			case 'estimates':
+			case 'bills':
+			ajaxURL = null;
+			enableFiltering = true;
+			filterColumn = 6;
+			strictSearchForEqualValue = true;
+			break;
+									
+			case 'recinvoices':
+			case 'recbills':
+			ajaxURL = null;
+			enableFiltering = true;
+			filterColumn = 5;
+			strictSearchForEqualValue = true;
+			break;
+			
+			case 'connections':
+			ajaxURL = null;
+			enableFiltering = false;
+			strictSearchForEqualValue = true;
+			break;
+			
+			case 'time_entries':
+			case 'expense_entries':
+			case 'mileage_entries':
+			ajaxURL = null;
+			defaultOrder = [[ 1, "desc" ]];			
+			enableFiltering = false;
+			break;
+			
+			/* EVERSIGN */
+			
+			case 'documents':
+			case 'contacts':
+			ajaxURL = null;
+			enableFiltering = true;
+			filterColumn = 3;
+			strictSearchForEqualValue = true;
+			break;
+			
+			case 'team':
+			
+			if (portalName === 'eversign') {
+			ajaxURL = null;
+			enableFiltering = true;
+			filterColumn = 3;
+			strictSearchForEqualValue = true;
+			} else if (portalName === 'invoicely') {
+			ajaxURL = '/php/table_data.php?type=' + currentPage + '&id=' + currentID;
+			enableFiltering = false;
+			filterColumn = 5;
+			strictSearchForEqualValue = false;
+			}
+			
+			break;
+			
+			case 'templates':
+			ajaxURL = null;
+			// disabled Template/Link filtering due to strange bug
+			// that prevented filtering when dynamically changing page 
+			enableFiltering = false;
+			filterColumn = 2;
+			strictSearchForEqualValue = false;
+			break;
+						
+			case 'trash':
+						
+			if (portalName === 'eversign') {
+			ajaxURL = null;
+			} else if (portalName === 'invoicely') {
+			ajaxURL = '/php/table_data.php?type=' + currentPage + '&id=' + currentID;
+			enableFiltering = false;
+			filterColumn = 5;
+			}
+			
+			break;
+									
+			default:
+			ajaxURL = '/php/table_data.php?type=' + currentPage + '&id=' + currentID;
+			enableFiltering = false;
+			filterColumn = 5;
+			strictSearchForEqualValue = false;
+						
+		}
+		
+		// extra DataTables functions 
+		jQuery.fn.dataTableExt.oApi.fnPagingInfo = function ( oSettings )
+		{
+   			return {
+        	"iStart":         oSettings._iDisplayStart,
+        	"iEnd":           oSettings.fnDisplayEnd(),
+        	"iLength":        oSettings._iDisplayLength,
+        	"iTotal":         oSettings.fnRecordsTotal(),
+        	"iFilteredTotal": oSettings.fnRecordsDisplay(),
+        	"iPage":          oSettings._iDisplayLength === -1 ? 0 : Math.ceil( oSettings._iDisplayStart / oSettings._iDisplayLength ),
+        	"iTotalPages":    oSettings._iDisplayLength === -1 ? 0 : Math.ceil( oSettings.fnRecordsDisplay() / oSettings._iDisplayLength )
+    		};
+		};
+		
+		//console.log(localStorage.getItem('dataTableSavedLength'));
+				
+		// basic DataTables config 
+		dataTable = $('[data-table="table"]').DataTable({
+        		"ajax": ajaxURL,
+				"iDisplayLength": localStorage.getItem('dataTableSavedLength') ? parseInt(localStorage.getItem('dataTableSavedLength')) : 10,
+				"order": defaultOrder ? defaultOrder : [],
+				stateSave: true,
+  				stateSaveCallback: function(settings,data) {
+      				
+					// log state data for debugging
+					//console.log('SAVED: '+JSON.stringify(data));
+
+					// save state data in local storage
+					localStorage.setItem('DataTables_state', JSON.stringify(data));
+					
+    			},
+  				stateLoadCallback: function(settings) {
+					
+					if ($('[name="load_from_datatables_state"]').val() === 'true') {
+
+						// save state data in variable
+						var stateData = JSON.parse(localStorage.getItem('DataTables_state'));
+
+						// log state data for debugging
+						//console.log('LOADED: ' + JSON.stringify(localStorage.getItem('DataTables_state')));
+						
+						// put state data search string into search box
+						$('[data-table="search"]').val(stateData.search.search);
+																												
+						// load all state data with DataTables
+						return stateData;
+					}
+					
+				},
+				"language": {
+      				"emptyTable": "Nothing to display here"
+    			},
+				"initComplete": function () {
+															
+					// get all ids of all objects/items contained in current dataTable
+					dataTableAllRows = this.fnGetNodes();
+					
+        			for(var i=0; i < dataTableAllRows.length; i++) {
+        				dataTableAllRowsIDsArray.push($(dataTableAllRows[i]).find('td input[type="checkbox"]').attr('data-item-id')); 
+        			}
+					
+					if (enableFiltering === true) {
+											
+					var thisTable = this;
+										
+    				// Populate values 
+  				    var $rows = this.fnGetNodes();
+  				    var values = {};
+					var colnums = [filterColumn];
+
+   				 	for (var col = 0, n = colnums.length; col < n; col++) {
+
+     					   var colnum = colnums[col];
+     					   if (typeof values[colnum] === "undefined") values[colnum] = {};
+	
+      					  // Create Unique List of Values
+      					  $('td:nth-child(' + colnum + ')', $rows).each(function () {
+        					    //values[colnum][$(this).find('[data-filter]').attr('data-filter')] = 1;
+        					    values[colnum][$(this).find('[data-filter]').text()] = 1;
+       					  });
+
+       					  // Create Checkboxes
+       					  var labels = [];
+       					  $.each(values[colnum], function (key, count) {
+        				 	 var $checkbox = $('<input />', {
+        					        'class': 'filter-column filter-column-' + colnum,
+         					        'type': 'checkbox',
+         					        'value': key
+         				  	 });
+         				     var $label = $('<label></label>', {
+          				      'class': 'filter-container'
+          				     }).append($checkbox).append(' ' + ucFirst(key.toLowerCase()));
+          				     $checkbox.on('click', function () {
+             				      thisTable.fnDraw();
+           				     }).data('colnum', colnum);
+          				     labels.push($label.get(0));
+       				     });
+       				     var $sorted_containers = $(labels).sort(function (a, b) {
+       				     return $(a).text().toLowerCase() > $(b).text().toLowerCase();
+       				     });
+       				     $('.table-filters').prepend($sorted_containers);
+       				     $sorted_containers.wrapAll($('<div></div>', {
+       				         'class': 'checkbox-group checkbox-group-column-' + colnum
+      				     }));
+  				    }
+
+   				    $.fn.dataTableExt.afnFiltering.push(function (oSettings, aData, iDataIndex) {
+    				       var checked = [];
+     				      $('.filter-column').each(function () {
+      				         var $this = $(this);
+      				         if ($this.is(':checked')) checked.push($this);
+      				     });
+
+       				    if (checked.length) {
+       				        var returnValue = false;
+         				      $.each(checked, function (i, $obj) {
+								  																					  
+           				      // $obj.val() contains the string based on which filtering happens
+						      // aData[$obj.data('colnum') - 1] is "this" current object's value 
+							  				
+							  // search for equal filter value in table row
+							  if (strictSearchForEqualValue === true) {
+								
+								  if ($.trim(aData[$obj.data('colnum') - 1].toLowerCase()) === $.trim($obj.val().toLowerCase())) {
+									returnValue = true;
+									return false; // exit loop early
+								  }
+								  
+							  // search for table rows that contain filter value
+							  } else {
+														  
+								  if ($.trim(aData[$obj.data('colnum') - 1].toLowerCase()).indexOf($.trim($obj.val().toLowerCase())) >= 0) {
+									 returnValue = true;
+									 return false; // exit loop early
+								  }
+								  
+							  }
+								  
+          				      });
+
+           				      return returnValue;
+       				    }
+
+       				    if (!checked.length) return true;
+       				    return false;
+	
+					   /* taken from http://jsfiddle.net/vol7ron/z7wJ5/ */
+		
+   				    });	
+					
+					}
+					
+				},
+				"fnDrawCallback": function () {
+					
+					$('[data-table="show_per_page"]').val(this.fnPagingInfo().iLength);
+										
+					$('[data-table="meta"]').html('<span data-meta="default">Showing <strong>'+((this.fnPagingInfo().iStart)+1)+'</strong> to <strong>'+this.fnPagingInfo().iEnd+'</strong> of <strong>'+this.fnPagingInfo().iTotal+'</strong> item(s)</span><span data-meta="custom" class="hidden">Selected <strong class="dynamic">0</strong> of <strong>'+this.fnPagingInfo().iTotal+'</strong> item(s)</span>');
+					deselectAllSelectedItems();
+																				
+        		}
+				
+		});
+				
+		// move pagination to show per page section
+		$('.dataTables_paginate').appendTo('[data-table="pagination"]');
+		
+		// use our search box instead of DataTable.js default 
+		$('[data-table="search"]').keyup(function(){
+      		dataTable.search($(this).val()).draw();
+		});
+		
+		
+		
+		// use our show-per-page instead of DataTable.js default 
+		$('[data-table="show_per_page"]').change(function(){
+			
+			localStorage.setItem('dataTableSavedLength', $(this).val());
+      		
+			dataTable.page.len($(this).val()).draw();
+		});
+		
+		// clear the current state config (page, search, etc.)
+		//dataTable.state.clear();
+		
+		// https://www.datatables.net 
+}
+
+
+/* REFRESH DATA TABLE */
+function refreshDataTable(resetPagination, callBack) {
+	"use strict";
+	
+	/* resetPagination is either "true" or "false" */
+	if (resetPagination !== true) {
+	resetPagination = false;
+	}
+	
+	if (callBack) {
+	dataTable.ajax.reload(function() {
+    callBack();
+	}, resetPagination);
+	} else {
+	dataTable.ajax.reload(null, resetPagination);
+	}
+	
+	//console.log('datatable refresh success');
+}
+
+
+/* REFRESH DATA TABLE WITH NEW URL */
+function refreshDataTableNewURL(URL) {
+	"use strict";
+	dataTable.ajax.url(URL).load(function() {
+		
+		/* this was specific to the old table tabs function, can be deleted
+		$('[data-reload-datatable-url]').removeClass('current');
+		$('[data-reload-datatable-url="'+URL+'"]').addClass('current');
+		*/
+	
+	});
+	
+}
+
+
+/* DATA TABLE CUSTOM FILTERING */
+$('body').on('click', '[data-reload-datatable="true"]', function() {
+	"use strict";
+	
+	var newURL = $(this).attr('data-reload-datatable-url');
+	refreshDataTableNewURL(newURL);
+	
+});
+
+
+/* GET LAST CLICKED OBJECT */
+var clickedObject;
+
+$(document).mousedown(function(e) {
+	'use strict';
+	clickedObject = $(e.target);
+});
+
+
+/* UCFIRST - CAPITALIZE FIRST LETTER OF STRING */
+function ucFirst(value) {
+	'use strict';
+	
+	if (!value){
+	return false;	
+	}
+	
+	return value.replace(/^./, value[0].toUpperCase());
+}
+
+
+/* UCWORDS - CAPITALIZE FIRST LETTER OF EACH WORD IN STRING */
+function ucWords(value) {
+	'use strict';
+	
+	if (!value){
+	return false;	
+	}
+		
+	var returnValue = value.toLowerCase().replace(/\b[a-z]/g, function(letter) {
+    return letter.toUpperCase();
+	});
+	
+	return returnValue;
+}
+
+
+/* PREVENT DEFAULT ON CLICK FUNCTION */
+$('body').on('click', '[data-prevent-default="true"]', function(event) {
+	"use strict";
+	event.preventDefault();
+});
+
+
+/* DROPDOWN */
+$('body').on('click', '.dropdown-toggle', function(evt) {
+	"use strict";
+		
+		if (evt.target.type == "checkbox") {
+            return;
+        }
+		
+		if ($(this).hasClass('sb_dropdown')) {
+			$('.sidebar_menu ul.sb_menu').toggleClass('disabled');	
+		} else {
+			$('.sidebar_menu ul.sb_menu').removeClass('disabled');	
+		}
+		
+        $('.dropdown-menu').not($(this).next('.dropdown-menu')).hide();
+        $(this).next('.dropdown-menu').toggle();
+		$(this).toggleClass('open');
+});
+
+
+/* CLOSE DROPDOWN */
+function closeDropdown() {
+	"use strict";
+	$('.sidebar_menu ul.sb_menu').removeClass('disabled');	
+    $('.dropdown-menu').hide();
+    $('.dropdown-menu li').removeClass('selected');
+	$('.dropdown-toggle').removeClass('open');
+	dropdownNavIndex = -1;
+}
+
+
+/* CLOSE DROPDOWN ON CLICK OF DOCUMENT */
+$(document).click(function(event) {
+	"use strict";
+        var target = event.target;
+		
+        if (!$(target).is('.dropdown-toggle') && !$(target).parents().is('.dropdown-toggle') && !$(target).is('.dropdown-menu.popover') && !$(target).parents().is('.dropdown-menu.popover') && !$(target).is('select') && !$(target).is('input[type="text"]') && !$(target).parents().is('.table-filters')) {
+			closeDropdown();
+        }
+});
+
+
+/* DROPDOWN NAVIGATION */
+var dropdownNavIndex = -1;
+
+$('html').on('keydown', 'body', function(event) {
+	"use strict";
+	
+	if ($('.dropdown-toggle.open').length) {
+				
+		var dropdownToggle = $('.dropdown-toggle.open');
+		var dropdownMenu = $(dropdownToggle).next('.dropdown-menu');
+		var isSubmittableDropdown = dropdownMenu.find('[data-dropdown="submit"]').length ? true : false;
+				
+    	if (isSubmittableDropdown !== true) {
+			
+			if (event.keyCode === 40) {  
+				event.preventDefault();
+        		navigateDropdown(1, $(dropdownToggle));
+			}
+		
+    		if (event.keyCode === 38) {
+				event.preventDefault();
+				navigateDropdown(-1, $(dropdownToggle));
+    		}
+			
+		}
+		
+    	if (event.keyCode === 13) {
+			event.preventDefault();
+
+				if (isSubmittableDropdown === true) {
+				dropdownMenu.find('[data-dropdown="submit"]').click();
+				} else {
+				
+					if (dropdownMenu.hasClass('contains_buttons')) {
+					// appending [0] to the link selector makes JS take into account href and target attributes when clicked
+					dropdownMenu.find('li').not('[data-dropdown="skip"]').eq(dropdownNavIndex).find('button')[0].click();
+					} else {
+					// appending [0] to the link selector makes JS take into account href and target attributes when clicked
+					dropdownMenu.find('li').not('[data-dropdown="skip"]').eq(dropdownNavIndex).find('a')[0].click();
+					}
+				
+				}
+				
+		}
+		
+    	if (event.keyCode === 27) {
+			event.preventDefault();
+			closeDropdown();
+		}
+	
+	}
+			  
+});
+                   
+function navigateDropdown(diff, dropdownToggle) {
+	"use strict";
+	
+	var dropdownMenu = dropdownToggle.next('.dropdown-menu');
+	var dropdownMenuLinks = dropdownMenu.find('li').not('[data-dropdown="skip"]');
+	
+    dropdownNavIndex += diff;
+		
+    if (dropdownNavIndex >= dropdownMenuLinks.length) {
+         dropdownNavIndex = 0;
+	} 
+	
+    if (dropdownNavIndex < 0) {
+         dropdownNavIndex = dropdownMenuLinks.length - 1;
+	}
+	
+    dropdownMenuLinks.removeClass('selected').eq(dropdownNavIndex).addClass('selected');
+}
+       
+
+/* NEW: ACTION ON SELECT CUSTOM VALUE IN INPUTS, SELECT */
+$('body').on('change', '[data-action="on-select-custom"]', function() {
+    "use strict";	
+	
+	var actionType = $(this).attr('data-action-type');
+	var inputType = $(this).attr('data-input-type');
+	var selector;
+	
+	switch (inputType) {
+	
+	case 'select':
+	selector = $(this).val();
+	break;
+	
+	case 'radio':
+	selector = $('[name="' + $(this).attr('name') + '"]:checked').val();
+	break;
+	
+	}
+	
+	if (selector === 'custom') {
+		
+		switch (actionType) {
+		
+		case 'dashboard_main_graph_params':
+		$(this).closest('li').find('[data-action-target="on-select-custom"]').show();	
+		break;
+		
+		case 'saved_categories_popup_unit':
+		$(this).closest('.form_row').find('[data-action-target="on-select-custom"]').show().focus();	
+		break;
+		
+		case 'statement_due_date':
+		case 'statement_expiration_date':
+		$(this).closest('.form_row').find('[data-action-target="on-select-custom"]').show().focus();	
+		$(this).closest('.form_row').find('[data-action-target="on-select-custom"] input[type="number"]').focus();	
+		break;
+		
+		case 'statement_item_unit':
+		$(this).hide();
+		$(this).closest('li').find('.select_arrows').hide();
+		$(this).closest('li').find('[data-action-target="on-select-custom"]').show().focus();	
+		break;
+		
+		case 'statement_total_tds':
+		$(this).hide();
+		$(this).closest('li').find('.select_arrows').hide();
+		$(this).closest('li').find('[data-action-target="on-select-custom"]').show();	
+		break;
+		
+		case 'statement_rec_frequency':
+		case 'account_satement_period':
+		$(this).closest('.page').find('[data-action-target="on-select-custom"]').css('display', 'inline-block');	
+		break;
+		
+		case 'default_custom_statement_email':
+		$(this).closest('.page').find('section.editor').removeClass('disabled');
+		break;
+		
+		case 'report_builder_period':
+		case 'report_builder_client_type':
+		$(this).closest('.form_row').next('[data-action-target="on-select-custom"]').css('display', 'inline-block').focus();	
+		break;
+		
+		case 'eversign_document_settings':
+		$(this).closest('.form_row').find('[data-action-target="on-select-custom"]').css('display', 'inline-block').focus();	
+		break;
+					
+		}
+		
+	} else {
+		
+		switch (actionType) {
+		
+		case 'dashboard_main_graph_params':
+		$(this).closest('li').find('[data-action-target="on-select-custom"]').hide();	
+		break;
+		
+		case 'saved_categories_popup_unit':
+		case 'statement_expiration_date':
+		case 'statement_due_date':
+		$(this).closest('.form_row').find('[data-action-target="on-select-custom"]').val('').hide();	
+		break;
+		
+		case 'statement_rec_frequency':
+		case 'account_satement_period':
+		$(this).closest('.page').find('[data-action-target="on-select-custom"]').css('display', 'none');	
+		break;
+		
+		case 'default_custom_statement_email':
+		$(this).closest('.page').find('section.editor').addClass('disabled');
+		$(this).closest('form').find('[name="custom_email_to"]').val($(this).closest('form').find('[name="custom_email_to"]').attr('data-default-fallback'));
+		$(this).closest('form').find('[name="custom_email_bcc"]').val($(this).closest('form').find('[name="custom_email_bcc"]').attr('data-default-fallback'));
+		$(this).closest('form').find('[name="custom_email_subject"]').val($(this).closest('form').find('[name="custom_email_subject"]').attr('data-default-fallback'));
+		$(this).closest('form').find('[name="custom_email_content"]').val($(this).closest('form').find('[name="custom_email_content"]').attr('data-default-fallback'));
+		break;
+		
+		case 'report_builder_period':
+		case 'report_builder_client_type':
+		$(this).closest('.form_row').next('[data-action-target="on-select-custom"]').hide();	
+		break;
+		
+		case 'eversign_document_settings':
+		$(this).closest('.form_row').find('[data-action-target="on-select-custom"]').hide();	
+		break;
+			
+		}		
+	
+	}
+});
+
+
+/* VALIDATE EMAIL */
+function isValidEmailAddress(emailAddress) {
+    var pattern = new RegExp(/^((([a-z]|\d|[!#\$%&'\*\+\-\/=\?\^_`{\|}~]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])+(\.([a-z]|\d|[!#\$%&'\*\+\-\/=\?\^_`{\|}~]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])+)*)|((\x22)((((\x20|\x09)*(\x0d\x0a))?(\x20|\x09)+)?(([\x01-\x08\x0b\x0c\x0e-\x1f\x7f]|\x21|[\x23-\x5b]|[\x5d-\x7e]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(\\([\x01-\x09\x0b\x0c\x0d-\x7f]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))))*(((\x20|\x09)*(\x0d\x0a))?(\x20|\x09)+)?(\x22)))@((([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.)+(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.?$/i);
+    return pattern.test(emailAddress);
+}
+
+
+/* VALIDATE URL */
+function is_valid_url(url) {
+    return /^(http(s)?:\/\/)?(www\.)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$/.test(url);
+}
+
+function is_valid_localhost_url(url) {
+    return /^http:\/\/\w+(\.\w+)*(:[0-9]+)?\/?(\/[.\w]*)*$/.test(url);
+}
+
+/* CHECK IF STRING CONTAINS EMAIL */
+function checkIfEmailInString(text) { 
+    var re = /(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/;
+    return re.test(text);
+}
+
+
+/* EXTRACT ALL EMAILS FROM STRING */
+function extractEmails(text)
+{
+    return text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi);
+}
+
+
+/* INITIALISE POPUP STRUCTURES */
+function initPopup(command) {
+	
+	if (command  === 'fixed') {
+	$('.x_page').addClass('fixed');	
+	}
+	
+	$('.x_page').show(0);
+	$('.popup_load_spinner').hide();
+	
+	if (command !== 'fixed') {
+	scrollToTop(0);
+	}
+		
+}
+
+function scrollToTop(speed) {
+	
+	if (!speed) {
+	speed = 0;	
+	}
+	
+    $("html, body").animate({
+       scrollTop: 0
+    }, speed);
+	
+}
+
+
+/* OPEN POPUP - DYNAMIC */
+$('body').on('click', '[data-popup="open"]', function(event) {
+    "use strict";
+	event.preventDefault();
+		
+	// if popup already open, cancel
+	if ($('.x_page').is(':visible')) {
+	return false;	
+	}
+	
+	// un-focus button to prevent re-click on enter
+	$(this).blur();
+		
+	// get type of popup
+	var identification = $(this).attr('data-popup-id');
+		
+	// PHP file to get HTML popup
+	var fileIdentifier; 
+	
+	// get ID of item to be edited, POSTed below via AJAX
+	var itemID;
+	
+	// get ID of connection related to current request, POSTed below via AJAX
+	var connectionID;
+	
+	// additional config
+	var fireDatePicker;
+	var fireUploadifive;
+	var doLoadExistingTags;
+	var fireAutocompletePlugin;
+	var fireTipr;
+	var fireEversignTooltips;
+	var doResetPanzoom;
+	
+	// this can be used to replace all "additional config" above
+	var callback;
+	
+	// custom x_window width
+ 	var xWindowWidth;
+		
+	// additional detail for special cases
+	var popupDetail = $(this).attr('data-popup-detail');
+	
+	// additional GET params to append to URL
+	var URLaddons = '';
+	
+	// additional POST array
+	var customArray;
+	
+	switch (identification) {
+		
+		case 'new_client':
+		case 'new_vendor':
+		fileIdentifier = 'create_edit_connection';
+		break;
+		
+		case 'edit_client':
+		case 'edit_vendor':
+		fileIdentifier = 'create_edit_connection';
+		connectionID = $('[name="client_id"]').val();
+		break;
+		
+		case 'new_connection_contact':
+		fileIdentifier = 'create_edit_connection_contact';
+		connectionID = $('[name="current_id"]').val();
+		break;
+		
+		case 'edit_connection_contact':
+		fileIdentifier = 'create_edit_connection_contact';
+		itemID = $(this).closest('tr').find('input[type="checkbox"]').attr('data-item-id');
+		break;
+		
+		case 'new_track_time':
+		case 'new_track_expense':
+		case 'new_track_mileage':
+		fileIdentifier = 'create_edit_track_entry';
+		fireDatePicker = true;
+		fireUploadifive = true;
+		doLoadExistingTags = true;
+		fireAutocompletePlugin = true;
+		break;
+		
+		case 'edit_track_time':
+		case 'edit_track_expense':
+		case 'edit_track_mileage':
+		fileIdentifier = 'create_edit_track_entry';
+		fireDatePicker = true;
+		fireUploadifive = true;
+		doLoadExistingTags = true;
+		fireAutocompletePlugin = true;
+		itemID = $(this).closest('tr').find('input[type="checkbox"]').attr('data-item-id');
+		break;
+		
+		case 'new_saved_item':
+		case 'new_saved_task':
+		case 'new_saved_expense':
+		case 'new_saved_trip':
+		case 'new_saved_tag':
+		fileIdentifier = 'create_edit_categories';
+		
+		if (popupDetail === 'statement') {
+			
+			URLaddons = '&statement=true';
+			
+			var categoryName = $(this).closest('.one_item_line').find('.item_textarea').val();
+			var categoryRate = $(this).closest('.one_item_line').find('[data-calculation="rate"]').val();
+			var categoryUnit; 
+			
+			var defaultCategoryUnit = $(this).closest('.one_item_line').find('.unit_lower select').val();
+			var customCategoryUnit = $(this).closest('.one_item_line').find('.unit_lower input[type="text"]').val();
+			
+			var useTextInput;
+			var passIn;
+			
+			if (identification === 'new_saved_item') {
+			
+				if (customCategoryUnit) {
+				categoryUnit = customCategoryUnit;
+				useTextInput = true;
+				} else {
+				categoryUnit = defaultCategoryUnit;	
+				}
+				
+			}
+			
+			if (categoryName || categoryRate || categoryUnit) {	
+			passIn = true;
+			}
+		
+		}
+		
+		break;
+		
+		case 'edit_saved_item':
+		case 'edit_saved_task':
+		case 'edit_saved_expense':
+		case 'edit_saved_trip':
+		case 'edit_saved_tag':
+		fileIdentifier = 'create_edit_categories';
+		itemID = $(this).closest('tr').find('input[type="checkbox"]').attr('data-item-id');
+		break;
+		
+		case 'new_statement_comment':
+		fileIdentifier = 'create_edit_statement_comment';
+		itemID = $('[name="current_id"]').val();
+		break;
+		
+		case 'edit_statement_comment':
+		fileIdentifier = 'create_edit_statement_comment';
+		itemID = $(this).closest('tr').find('input[type="checkbox"]').attr('data-item-id');
+		break;
+		
+		case 'new_invoice_payment':
+		case 'new_bill_payment':
+		fileIdentifier = 'create_edit_statement_payment';
+		fireDatePicker = true;
+		fireUploadifive = true;
+		doLoadExistingTags = true;
+		itemID = $('[name="current_id"]').val();
+		break;
+		
+		case 'edit_invoice_payment':
+		case 'edit_bill_payment':
+		fileIdentifier = 'create_edit_statement_payment';
+		fireDatePicker = true;
+		fireUploadifive = true;
+		doLoadExistingTags = true;
+		itemID = $(this).closest('tr').find('input[type="checkbox"]').attr('data-item-id');
+		break;
+		
+		case 'new_payment_method':
+		fileIdentifier = 'new_payment_method';
+		fireTipr = true;
+		break;
+		
+		case 'upgrade':
+		fileIdentifier = 'upgrade';
+		itemID = $(this).attr('data-feature');
+		break;
+		
+		/* EVERSIGN */
+		
+		case 'add_initials':
+		case 'add_signature':
+		case 'add_default_initials':
+		case 'add_default_signature':
+		
+			fileIdentifier = 'add_signature_initials';
+			xWindowWidth = '750px';
+			fireUploadifive = true;
+					
+			if (currentPage === 'sign_document') {
+				
+				doResetPanzoom = true;
+							
+				if ($('body').find('[name="flexible_signing_enabled"]').val() == 1) {
+														
+					URLaddons = '&document_hash=' + $('body').find('[name="document_hash"]').val() + '&signer_hash=' + $('body').find('[name="signer_hash"]').val() + '&field_id=' + $(this).closest('[data-field-id]').attr('data-field-id');
+				
+				} else {
+					
+					URLaddons = '&document_hash=' + $('body').find('[name="document_hash"]').val() + '&signer_hash=' + $('body').find('[name="signer_hash"]').val() + '&field_id=' + $(this).attr('data-field-id');
+									
+				}
+							
+			} else {
+								
+				URLaddons = '&field_id=' + $(this).closest('[data-field-id]').attr('data-field-id');
+				
+			}
+			
+			// added by Paul on Nov 29
+			// to fire signature pad if only type DRAW is allowed
+			if (currentPage === 'sign_document') {
+				callback = function() { 
+					if ($('body').find('[data-sign-action="draw"]').hasClass('selected')) {
+					fireSignatureInitialsPopupTab('draw');
+					}
+				};
+			}
+		
+		break;
+		
+		case 'edit_initials':
+		case 'edit_signature':
+		
+			fileIdentifier = 'add_signature_initials';
+			xWindowWidth = '750px';
+			fireUploadifive = true;
+					
+			if (currentPage === 'sign_document') {
+				
+				doResetPanzoom = true;
+				
+				if ($('body').find('[name="flexible_signing_enabled"]').val() == 1) {
+														
+					URLaddons = '&document_hash=' + $('body').find('[name="document_hash"]').val() + '&signer_hash=' + $('body').find('[name="signer_hash"]').val() + '&field_id=' + $(this).closest('[data-field-id]').attr('data-field-id');
+				
+				} else {
+					
+					URLaddons = '&document_hash=' + $('body').find('[name="document_hash"]').val() + '&signer_hash=' + $('body').find('[name="signer_hash"]').val() + '&field_id=' + $(this).attr('data-field-id');
+									
+				}
+				
+			} else {
+			
+				URLaddons = '&field_id=' + $(this).closest('[data-field-id]').attr('data-field-id');
+			
+			}
+		
+			var signAction = $(this).attr('data-sign-action');
+			var base64Content;
+						
+			// if in editor, take prefilled value from field parent
+			if ($(this).closest('.draggable.cloned').find('.popup_trigger').length) {
+			base64Content = 	$(this).closest('.draggable.cloned').attr('data-prefilled-value');
+			// if in signing, field is already $(this)
+			} else {
+			base64Content = 	$(this).attr('data-prefilled-value');
+			}
+			
+			customArray = JSON.stringify({ 
+				sign_action: $(this).attr('data-sign-action'), 
+				base64_content: base64Content, 
+				uncropped_base64_content: $(this).attr('data-uncropped-base64'),  
+				chosen_saved_id: $(this).attr('data-chosen-saved-id'),  
+				font_text: $(this).attr('data-typed-text'),  
+				font_id: $(this).attr('data-typed-font-id'),  
+				font_family: $(this).attr('data-typed-font'),  
+			});
+			callback = function() { 
+				fireSignatureInitialsPopupTab(signAction); 
+			};
+			
+		break;
+		
+		case 'sign_document_upload_attachments':
+		case 'sign_document_edit_attachments':
+				
+			fileIdentifier = 'upload_files';
+			fireUploadifive = true;
+			
+			var fieldID;
+			
+			if ($('body').find('[name="flexible_signing_enabled"]').val() == 1) {
+			fieldID = $(this).closest('[data-field-id]').attr('data-field-id');
+			} else {
+			fieldID = $(this).attr('data-field-id');
+			}
+			
+			URLaddons = '&field_id=' + fieldID;
+			
+			if (currentPage === 'sign_document') {
+				
+				doResetPanzoom = true;
+				
+				URLaddons += '&document_hash=' + $('body').find('[name="document_hash"]').val() + '&signer_hash=' + $('body').find('[name="signer_hash"]').val();
+			
+			}
+								
+			if (identification === 'sign_document_edit_attachments') {
+			customArray = $(this).closest('.draggable.cloned').attr('data-file-ids');
+			}
+			
+		break;
+		
+		// does this exist?
+		case 'sign_document_view_attachments':
+				
+			fileIdentifier = 'upload_files';
+			customArray = $(this).closest('.draggable.cloned').attr('data-file-ids');
+		
+		break;
+		
+		case 'view_document_view_attachments':
+		
+			fileIdentifier = 'upload_files';
+			customArray = $(this).attr('data-file-ids');
+					
+		break;
+		
+		case 'document_editor_add_attachments':
+		case 'document_editor_edit_attachments':
+		
+			fileIdentifier = 'upload_files';
+			fireUploadifive = true;
+			URLaddons = '&field_id=' + $(this).closest('.draggable.cloned').attr('data-field-id');
+			customArray = $(this).closest('.draggable.cloned').attr('data-file-ids');
+			
+		break;
+		
+		case 'create_api_app':
+		case 'edit_api_app':
+		
+			fileIdentifier = 'create_edit_api_app';
+			itemID = $(this).closest('li[data-app-id]').attr('data-app-id');
+			fireEversignTooltips = true;
+		
+		break;
+				
+		default:
+		fileIdentifier = identification;
+	}
+	
+	if (doResetPanzoom === true) {
+	resetPanzoom();
+	}
+
+	
+	initPopup();	
+		
+	$('.x_window').css('min-height', '200px');
+	
+	if (xWindowWidth) {
+		$('.x_window').css('width', xWindowWidth);
+	} else {
+		$('.x_window').css('width', '450px');
+	}
+	
+	$('.popup_load_spinner').show();
+	
+	var languageAddon = '';
+	
+	if (portalName === 'eversign') {
+				
+		if ($('html').hasClass('public')) {
+		languageAddon = '&language_override=' + returnValidatedLanguage(currentLanguage);
+		}
+	
+	}
+			
+    $.ajax({
+        url: '/site_templates/x_page/' + fileIdentifier + '.php?is_ajax=1' + languageAddon + URLaddons,
+        dataType: 'html',
+		data: ({ identification: identification, itemID: itemID, connectionID: connectionID, custom_array: customArray }),
+		type: 'POST',
+		statusCode: {
+    		205: function() {
+        	window.location.href = '/login';
+			return false;
+    	}
+		},
+        success: function(data) {
+			
+			//$('.x_window').css('overflow', 'visible');
+			
+            $('.x_window').append(data);
+			$('.popup_load_spinner').hide();
+			
+			if (fireDatePicker === true) {
+			datePicker('datepicker');	
+			}
+			
+			if (fireUploadifive === true) {
+			fireUploadifivePlugin();
+			}
+			
+			if (fireTipr === true) {
+			fireTiprPlugin();	
+			}
+			
+			if (fireEversignTooltips === true) {
+			fireTooltips();	
+			}
+			
+			if (callback) {
+			callback();	
+			}
+			
+			if (doLoadExistingTags === true) {
+			loadTagsPopover('tags');	
+			loadTagsPopover('taxes');	
+			loadTagsPopover('discounts');	
+			loadTagsPopover('shipping');	
+			}
+			
+			if (fireAutocompletePlugin === true) {
+			fireAutocomplete('connection');
+			fireAutocomplete('item');
+			fireAutocomplete('expense');
+			fireAutocomplete('mileage');
+			fireAutocomplete('time');
+			}
+			
+			if (passIn === true) {
+			$('[name="create_edit_category[name]"]').val(categoryName);
+			$('[name="create_edit_category[rate]"]').val(categoryRate);
+					
+				if (useTextInput === true) {
+				$('[name="create_edit_category[unit]"]').val('custom');
+				$('[name="create_edit_category[custom_unit]"]').show();
+				$('[name="create_edit_category[custom_unit]"]').val(categoryUnit);
+				} else {
+				$('option[value="'+categoryUnit+'"]').attr('selected','selected');
+				}
+					
+			}
+
+        }
+    });
+	
+}); 
+
+
+/* OPEN POPUP - CONFIRMATION MANUALLY WITHOUT SUBMISSION */
+function openConfirmationPopup(id, popupHeading, confirmationText, submitButtonText) {
+		
+	var command;
+	
+	switch (id) {
+	
+		case 'download_pdf_docs':
+		
+			if (currentPage === 'documents' || currentPage === 'templates') {
+			command = 'fixed';
+			}
+		
+		break;
+		
+		default:
+		command = null;
+		break;
+		
+	}
+		
+	// confirmation popup 
+	$('.x_window').css('min-height','0px');
+	$('.x_window').css('width','450px');
+	
+	initPopup(command);	
+	
+	var cancelButtonText; 
+	
+	if (portalName === 'eversign') {
+	cancelButtonText = translateLanguage('Cancel');
+	} else {
+	cancelButtonText = 'Cancel';
+	}
+	
+	if (id === 'sign_document_finish_early') {
+	cancelButtonText = 'No, Continue Filling Out';
+	}
+								
+	var appendContent = '<div class="x_content confirmation '+id+'"><header><h1>'+popupHeading+'</h1><a class="x_close close_x"></a></header><form id="'+id+'" name="'+id+'" class="form_standard x_form"><div class="board"><div class="page"><div style="display: none;" class="info_strip"><div class="message">Information</div></div><section class="explanation">'+confirmationText+'</section>';
+	
+	if (submitButtonText) {
+	
+	appendContent += '<section><div class="form_row"><button type="submit" form="'+id+'" class="save_button ccfg_button_secondary">'+submitButtonText+'</button><a class="cancel_button close_x">'+cancelButtonText+'</a></section></div>';
+	
+	}
+	
+	appendContent += '</div></form></div>';
+		
+	$('.x_window').append(appendContent);
+
+}
+
+/* OPEN POPUP - CONFIRMATION */
+$('body').on('click', '[data-confirmation-popup="open"]', function(event) {
+    "use strict";
+	event.preventDefault();
+		
+	// un-focus button to prevent re-click on enter
+	$(this).blur();
+	
+	// get initial form for "submit-initial-form" actionType
+	var initialFormID = $(this).attr('form');
+	
+	$('.x_window').css('min-height','0px');
+		
+	var confirmAction = $(this).attr('data-confirmation-popup-action');
+		
+	var that = $(this); 
+		
+	var confirmationText;
+	var confirmationButton;
+	var actionType;
+		
+	switch (confirmAction) {
+		
+			case 'selection-delete':
+			confirmationText = 'Are you sure you want to delete the selected item(s)?';
+			confirmationButton = 'Delete';
+			actionType = 'selection';
+			break;
+			
+			case 'selection-delete-page-reload':
+			confirmationText = 'Are you sure you want to delete the selected item(s)?';
+			confirmationButton = 'Delete';
+			actionType = 'selection-page-reload';
+			break;
+			
+			case 'selection-mark-paid':
+			confirmationText = 'Are you sure you want to mark the selected item(s) as paid?';
+			confirmationButton = 'Confirm';
+			actionType = 'selection-mark-paid';
+			break;
+			
+			case 'selection-mark-unpaid':
+			confirmationText = 'Are you sure you want to mark the selected item(s) as unpaid?';
+			confirmationButton = 'Confirm';
+			actionType = 'selection-mark-unpaid';
+			break;
+			
+			case 'selection-delete-permanently':
+			confirmationText = 'Are you sure you want to permanently delete the selected item(s)?';
+			confirmationButton = 'Delete';
+			actionType = 'trash';
+			break;
+			
+			case 'empty-trash':
+			confirmationText = 'Are you sure you want to delete all trashed items? This cannot be undone.';
+			confirmationButton = 'Delete';
+			actionType = 'empty-trash';
+			break;
+			
+			case 'selection-archive':
+			confirmationText = 'Are you sure you want to archive the selected item(s)?';
+			confirmationButton = 'Archive';
+			actionType = 'selection';
+			break;
+			
+			case 'selection-activate':
+			confirmationText = 'Are you sure you want to activate the selected team member(s)?';
+			confirmationButton = 'Activate';
+			actionType = 'selection';
+			break;
+			
+			case 'selection-cancel':
+			confirmationText = 'Are you sure you want to cancel the selected item(s)?';
+			confirmationButton = 'Confirm';
+			actionType = 'selection';
+			break;
+			
+			case 'selection-cancel-page-reload':
+			confirmationText = 'Are you sure you want to cancel the selected item(s)?';
+			confirmationButton = 'Confirm';
+			actionType = 'selection-page-reload';
+			break;
+			
+			case 'selection-archive-page-reload':
+			confirmationText = 'Are you sure you want to archive the selected item(s)?';
+			confirmationButton = 'Confirm';
+			actionType = 'selection-page-reload';
+			break;
+			
+			case 'selection-unarchive-page-reload':
+			confirmationText = 'Are you sure you want to unarchive the selected item(s)?';
+			confirmationButton = 'Confirm';
+			actionType = 'selection-page-reload';
+			break;
+			
+			case 'selection-recover':
+			confirmationText = 'Are you sure you want to recover the selected item(s)?';
+			confirmationButton = 'Recover';
+			actionType = 'trash';
+			break;
+			
+			case 'selection-convert-to-invoice':
+			confirmationText = 'An invoice will be created from this item.';
+			confirmationButton = 'Create Invoice';
+			actionType = 'selection-convert-to-invoice';
+			break;
+			
+			case 'selection-convert-to-bill':
+			confirmationText = 'A bill will be created from this item.';
+			confirmationButton = 'Create Bill';
+			actionType = 'selection-convert-to-bill';
+			break;
+			
+			case 'selection-convert-to-estimate':
+			confirmationText = 'An estimate will be created from this item.';
+			confirmationButton = 'Create Estimate';
+			actionType = 'selection-convert-to-estimate';
+			break;
+			
+			case 'reset-account':
+			confirmationText = 'Are you sure you want to reset your account?';
+			confirmationButton = 'Reset Account';
+			actionType = 'submit-initial-form';
+			break;
+			
+			case 'cancel-account':
+			confirmationText = 'Are you sure you want to cancel your account?';
+			confirmationButton = 'Cancel Account';
+			actionType = 'cancel-account';
+			break;
+			
+			case 'single-trash':
+			confirmationText = 'Are you sure you want to delete this item?';
+			confirmationButton = 'Delete';
+			actionType = 'direct';
+			break;
+			
+			case 'single-cancel':
+			confirmationText = 'Are you sure you want to cancel this item?';
+			confirmationButton = 'Confirm';
+			actionType = 'direct';
+			break;
+			
+			case 'single-archive':
+			confirmationText = 'Are you sure you want to archive this item?';
+			confirmationButton = 'Confirm';
+			actionType = 'direct';
+			break;
+			
+			case 'single-delete':
+			confirmationText = 'Are you sure you want to delete this item?';
+			confirmationButton = 'Delete';
+			actionType = 'direct';
+			break;
+			
+			case 'single-unarchive':
+			confirmationText = 'Are you sure you want to unarchive this item?';
+			confirmationButton = 'Confirm';
+			actionType = 'direct';
+			break;
+			
+			case 'delete-business':
+			confirmationText = 'Are you sure you want to delete this business? This action cannot be reversed.';
+			confirmationButton = 'Delete Business';
+			actionType = 'delete-business';
+			break;
+			
+			case 'delete-payment-method':
+			confirmationText = 'Are you sure you want to delete this payment method? This action cannot be reversed.';
+			confirmationButton = 'Delete';
+			actionType = 'delete-payment-method';
+			break;
+			
+			case 'downgrade-plan':
+			confirmationText = 'Are you sure you want to downgrade your subscription plan?';
+			confirmationButton = 'Downgrade';
+			actionType = 'downgrade-plan';
+			break;
+			
+			case 'reset-access-key':
+			confirmationText = 'Are you sure you want to reset your API access key?';
+			confirmationButton = 'Confirm';
+			actionType = 'reset-access-key';
+			break;
+			
+			/* EVERSIGN */
+			
+			case 'eversign_delete_permanently':
+			confirmationText = 'Are you sure you want to permanently delete the selected item(s)?';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_delete_permanently';
+			break;
+			
+			case 'eversign_recover_deleted_item':
+			confirmationText = 'Are you sure you want to recover the selected item(s)?';
+			confirmationButton = 'Recover';
+			actionType = 'eversign_recover_deleted_item';
+			break;
+			
+			case 'eversign_single_permanently_delete_item':
+			confirmationText = 'Are you sure you want to permanently delete the selected item(s)?';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_single_permanently_delete_item';
+			break;
+			
+			case 'eversign_single_recover_deleted_item':
+			confirmationText = 'Are you sure you want to recover the selected item(s)?';
+			confirmationButton = 'Recover';
+			actionType = 'eversign_single_recover_deleted_item';
+			break;
+			
+			case 'enable_ip_signing':
+			confirmationText = 'Enabling In-Person Signing will disable email address verification for this template. By clicking "Enable" you agree that it is your sole responsibility to verify the identity of this template\'s signers.';
+			confirmationButton = 'Enable';
+			actionType = 'enable_ip_signing';
+			break;
+			
+			case 'disable_ip_signing':
+			confirmationText = 'Disabling In-Person Signing will re-enable email address verification for this template. Click "Disable" to confirm.';
+			confirmationButton = 'Disable';
+			actionType = 'disable_ip_signing';
+			break;
+			
+			case 'eversign_activate_team_member':
+			confirmationText = 'Please confirm that you would like to activate this team member.';
+			confirmationButton = 'Activate';
+			actionType = 'eversign_activate_team_member';
+			break;
+			
+			case 'eversign_deactivate_team_member':
+			confirmationText = 'Please confirm that you would like to deactivate this team member.';
+			confirmationButton = 'Dectivate';
+			actionType = 'eversign_deactivate_team_member';
+			break;
+			
+			case 'eversign_activate_team_members':
+			confirmationText = 'Please confirm that you would like to activate these team members.';
+			confirmationButton = 'Activate';
+			actionType = 'eversign_activate_team_members';
+			break;
+			
+			case 'eversign_deactivate_team_members':
+			confirmationText = 'Please confirm that you would like to deactivate these team members.';
+			confirmationButton = 'Dectivate';
+			actionType = 'eversign_deactivate_team_members';
+			break;
+						
+			case 'eversign_archive_team_members':
+			confirmationText = 'Are you sure you want to archive these team members?';
+			confirmationButton = 'Archive';
+			actionType = 'eversign_archive_team_members';
+			break;
+			
+			case 'eversign_unarchive_team_members':
+			confirmationText = 'Are you sure you want to unarchive these team members?';
+			confirmationButton = 'Unarchive';
+			actionType = 'eversign_unarchive_team_members';
+			break;
+			
+			case 'eversign_delete_team_member':
+			confirmationText = 'Are you sure you want to delete this team member. This action cannot be undone.';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_delete_team_member';
+			break;
+			
+			case 'eversign_archive_contacts':
+			confirmationText = 'Are you sure you want to archive these contacts?';
+			confirmationButton = 'Archive';
+			actionType = 'eversign_archive_contacts';
+			break;
+			
+			case 'eversign_unarchive_contacts':
+			confirmationText = 'Are you sure you want to unarchive these contacts?';
+			confirmationButton = 'Unarchive';
+			actionType = 'eversign_unarchive_contacts';
+			break;
+			
+			case 'eversign_delete_contact':
+			confirmationText = 'Are you sure you want to delete this contact? This action cannot be undone.';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_delete_contact';
+			break;
+			
+			case 'eversign_delete_contacts':
+			confirmationText = 'Are you sure you want to delete these contacts? This action cannot be undone.';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_delete_contacts';
+			break;
+			
+			case 'eversign_delete_signature_initials':
+			confirmationText = 'Are you sure you want to delete this item? This action cannot be undone.';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_delete_signature_initials';
+			break;
+			
+			case 'eversign_single_delete_document':
+			confirmationText = 'Are you sure you want to delete this item?';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_single_delete_document';
+			break;
+			
+			case 'eversign_bulk_delete_documents':
+			confirmationText = 'Are you sure you want to delete these items?';
+			confirmationButton = 'Delete';
+			actionType = 'eversign_bulk_delete_documents';
+			break;
+			
+			case 'eversign_single_cancel_document':
+			confirmationText = 'Are you sure you want to cancel this item?';
+			confirmationButton = 'Confirm';
+			actionType = 'eversign_single_cancel_document';
+			break;
+			
+			case 'eversign_archive_document':
+			confirmationText = 'Are you sure you want to archive this item?';
+			confirmationButton = 'Archive';
+			actionType = 'eversign_archive_document';
+			break;
+			
+			case 'eversign_unarchive_document':
+			confirmationText = 'Are you sure you want to unarchive this item?';
+			confirmationButton = 'Unarchive';
+			actionType = 'eversign_unarchive_document';
+			break;
+			
+			case 'eversign_archive_documents':
+			confirmationText = 'Are you sure you want to archive these items?';
+			confirmationButton = 'Archive';
+			actionType = 'eversign_archive_documents';
+			break;
+			
+			case 'eversign_unarchive_documents':
+			confirmationText = 'Are you sure you want to unarchive these items?';
+			confirmationButton = 'Unarchive';
+			actionType = 'eversign_unarchive_documents';
+			break;
+			
+			case 'eversign_send_reminder_to_all':
+			confirmationText = 'Click "Send" to send a reminder to all signing parties on this document. This can only be done once per 24 hours.';
+			confirmationButton = 'Send';
+			actionType = 'eversign_send_reminder_to_all';
+			break;
+			
+			case 'eversign_send_reminder_to_signer':
+			confirmationText = 'Click "Send" to send a reminder to this signer.';
+			confirmationButton = 'Send';
+			actionType = 'eversign_send_reminder_to_signer';
+			break;
+								
+			case 'eversign_empty_trash':
+			confirmationText = 'Are you sure you want to empty the trash? This cannot be undone.';
+			confirmationButton = 'Empty Trash';
+			actionType = 'eversign_empty_trash';
+			break;
+			
+			case 'eversign_decline_document':
+			confirmationText = 'Are you sure you want to decline to sign this document? This cannot be undone.';
+			confirmationButton = 'Decline';
+			actionType = 'eversign_decline_document';
+			break;	
+			
+			case 'eversign_remove_signer':
+			confirmationText = 'Are you sure you want to remove this signer? This cannot be undone.';
+			confirmationButton = 'Remove Signer';
+			actionType = 'eversign_remove_signer';
+			break;	
+			
+			case 'delete_api_app':
+			confirmationText = 'Are you sure you want to delete this application? This cannot be undone.';
+			confirmationButton = 'Delete App';
+			actionType = 'delete_api_app';
+			break;	
+			
+			case 'revoke_app_authorization':
+			confirmationText = 'Are you sure you want to revoke this app\'s authorization to access your eversign account?';
+			confirmationButton = 'Revoke';
+			actionType = 'revoke_app_authorization';
+			break;			
+			
+			default:
+			confirmationText = 'Are you sure?';
+			confirmationButton = 'Confirm';
+			actionType = 'direct';
+
+	}
+		
+	initPopup();	
+		
+	/* append confirmation popup content */
+	$('.x_window').append('<div class="x_content confirmation"><header><h1>Confirmation</h1><a class="x_close close_x"></a></header><form id="confirm" class="form_standard x_form"><div class="board"><div class="page"><section><p>'+confirmationText+'</p></section><section><div class="form_row"><button type="submit" form="confirm" class="save_button ccfg_button_secondary">'+confirmationButton+'</button><a class="cancel_button close_x">Cancel</a></section></div></div></form></div>');
+		
+	$('.x_content.confirmation form').on('submit', function(event) {
+			event.preventDefault();
+					
+			/* if no error, show loading animation */
+			$('[form="'+$(this).attr('id')+'"]').addClass('loading');
+		
+			if (actionType === 'submit-initial-form') { 
+				$('form#'+initialFormID).submit();
+			} else {
+				ajaxHandlerAction(that, actionType, null);
+			}
+				
+	});	
+	
+});
+
+
+/* CLOSE POPUP */
+function closePopup() {
+    "use strict";
+	
+	$('.x_page').hide();
+    $('.x_page .x_window .x_content').remove();
+		
+}
+
+$("body").on("click", '.close_x', function(event) {
+    "use strict";
+    event.preventDefault();
+	
+	// if signature or initials creation is cancelled and field left empty during flexible signing, remove field
+	if (currentPage === 'sign_document' && $('body').find('[name="flexible_signing_enabled"]').val() == 1) {
+		
+		var fieldInQuestion = $('body').find('[data-field-id="'+$('body').find('[name="field_id"]').val()+'"]');
+		
+		if (!fieldInQuestion.hasClass('status_finished')) {
+		fieldInQuestion.remove();	
+		}
+		
+		updateUnfinishedFields();
+		
+	}
+	
+	closePopup();
+	
+});
+
+
+/* POPUP ERROR INFO SUCCESS MESSAGE */
+function popupInfo(showHide, type, message) {
+    "use strict";
+	
+	var defaultMessage;
+				
+	$('.x_page .x_window .x_content .info_strip').removeClass('error').removeClass('success');
+	
+	if (showHide === 'hide') {
+
+    	$('.x_page .x_window .x_content .info_strip').hide();
+
+	} else {
+		
+		$('.x_page .x_window .x_content .info_strip').show();
+			
+		if (type === 'error') {
+		defaultMessage = 'Error: Please try again or contact support.';
+    	$('.x_page .x_window .x_content .info_strip').addClass('error');
+		} else if (type === 'success') {
+		defaultMessage = 'Success: The requested action has been performed.';
+    	$('.x_page .x_window .x_content .info_strip').addClass('success');
+		}
+		
+		if (message) {
+    	$('.x_page .x_window .x_content .info_strip .message').html(message);
+		} else {
+    	$('.x_page .x_window .x_content .info_strip .message').html(defaultMessage);
+		}
+				
+	}
+	
+}
+
+
+/* GENERAL PANEL ERROR INFO SUCCESS MESSAGE */
+function generalInfo(showHide, type, message) {
+    "use strict";
+	
+	if (showHide === 'hide') {
+	
+	$('.alert.dynamic').remove();
+		
+	} else if (showHide && type && message) {
+		
+	scrollToTop(0);
+	$('aside#alerts').html('<p class="alert '+type+' dynamic">'+message+'</p>');
+			
+	}
+	
+	
+}
+
+
+/* ACTION SELECTED ITEMS */
+function ajaxHandlerAction(that, type, customData) {
+    "use strict";
+				
+	var selectedItemsArray = $('[name="selected_items"]').val();
+		
+	var dataHandlerEndpoint = $(that).attr('data-handler-endpoint');
+	var dataHandlerAction = $(that).attr('data-handler-action');
+	var dataHandlerPostData = $(that).attr('data-handler-postdata');
+	var dataObjectID = $(that).attr('data-object-id');
+	
+	var dataHandlerType = $(that).attr('data-handler-type');
+	
+	var doReloadPage = $(that).attr('data-reload-page');
+	
+	var showSuccessMessage;
+	var successMessage;
+	
+	var doRefreshDataTable;
+	
+	var hardRedirectURL = $(that).attr('data-hard-redirect-url');
+	
+	var redirect = $(that).attr('data-redirect');
+	var redirectPath = $(that).attr('data-redirect-path');
+	var redirectFile = $(that).attr('data-redirect-file');
+	var redirectPage = $(that).attr('data-redirect-page');
+	var redirectType = $(that).attr('data-redirect-type');
+	var redirectID = $(that).attr('data-redirect-id');
+	
+	var saveDatatableState;
+		
+	var URL;
+	var data = {};
+		
+	switch (type) {
+	
+		case 'direct':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		break;
+
+		case 'selection':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { postArray: dataHandlerPostData, object_array: selectedItemsArray };
+		doRefreshDataTable = true;
+		showSuccessMessage = true;
+		break;
+		
+		case 'trash':
+		URL = '/php/advanced_ajax_handler.php?type='+dataHandlerType;
+		data = { postArray: selectedItemsArray };
+		doRefreshDataTable = true;
+		showSuccessMessage = true;
+		break;
+		
+		case 'selection-page-reload':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { postArray: dataHandlerPostData, object_array: selectedItemsArray };
+		showSuccessMessage = true;
+		saveDatatableState = true;
+		doReloadPage = true;
+		break;
+		
+		case 'selection-mark-paid':
+		case 'selection-mark-unpaid':
+		URL = '/php/advanced_ajax_handler.php?type='+dataHandlerType;
+		data = { object_array: selectedItemsArray };
+		showSuccessMessage = true;
+		saveDatatableState = true;
+		doReloadPage = true;
+		break;
+		
+		case 'empty-trash':
+		//console.log(dataTableAllRowsIDsArray);
+		URL = '/php/advanced_ajax_handler.php?type='+dataHandlerType;
+		data = { postArray: JSON.stringify(dataTableAllRowsIDsArray) }; 
+		doRefreshDataTable = true;
+		showSuccessMessage = true;
+		break;
+
+		case 'start-timer':
+		dataHandlerPostData = '{"tracker_active":1}';
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'stop-timer':
+		dataHandlerPostData = '{"tracker_active":0}';
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'delete-business':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		hardRedirectURL = '/select?deleted';
+		break;
+		
+		case 'delete-payment-method':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		break;
+		
+		case 'downgrade-plan':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		break;
+		
+		case 'upgrade-plan':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'cancel-checkout':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'checkout-change-payment-frequency':
+		/* allow only if radio button is not already checked */
+		if (that.attr('data-radio-selected') === 'true') {
+		return false;	
+		} else {
+		$('[data-radio-selected="true"]').removeAttr('data-radio-selected');
+		$(that).attr('data-radio-selected', 'true');
+		}
+		/* allow only if radio button is not already checked */
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'cancel-account':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = {};
+		break;
+		
+		case 'reset-access-key':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = {};
+		showSuccessMessage = true;
+		break;
+		
+		case 'selection-convert-to-invoice':
+		window.location.href = '/invoices/new/'+currentType+':' + $.parseJSON(selectedItemsArray);
+		return false;
+		break;
+		
+		case 'selection-convert-to-estimate':
+		window.location.href = '/estimates/new/'+currentType+':' + $.parseJSON(selectedItemsArray);
+		return false;
+		break;
+		
+		case 'selection-convert-to-bill':
+		window.location.href = '/bills/new/'+currentType+':' + $.parseJSON(selectedItemsArray);
+		return false;
+		break;
+		
+		case 'accept-estimate':
+		URL = '/php/public_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'mark-items-billed':
+		URL = '/php/public_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		break;
+		
+		case 'mark-estimate-invoiced':
+		URL = '/php/ajax_handler.php?&endpoint=estimate&action_type=edit&object_id='+customData;
+		data = { postArray: '{"statement_status":"invoiced"}' };
+		break;
+		
+		case 'mark-trackers-billed':
+		URL = '/php/ajax_handler.php?endpoint=tracker&action_type=edit';
+
+		var trackerItemsArray = [];
+		var trackerItemsEach = customData.split(',');
+		
+		$.each(trackerItemsEach, function(number) {
+			trackerItemsArray.push(trackerItemsEach[number]);
+		});
+		
+		//console.log(JSON.stringify(trackerItemsArray));
+
+		data = { postArray: '{"tracker_billed":1}', object_array: JSON.stringify(trackerItemsArray) };
+		break;
+		
+		case 'mark-statement-paid':
+		case 'mark-statement-unpaid':
+		URL = '/php/advanced_ajax_handler.php?type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		break;
+		
+		/* EVERSIGN */
+				
+		case 'eversign_delete_permanently':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+				
+		case 'eversign_recover_deleted_item':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray, additional_parameters: '{"restore": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_single_permanently_delete_item':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_single_recover_deleted_item':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { additional_parameters: '{"restore": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_activate_team_member':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: '{"is_active": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_deactivate_team_member':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: '{"is_active": 0}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_activate_team_members':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray, postArray: '{"is_active": 1}' }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_deactivate_team_members':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray, postArray: '{"is_active": 0}' }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_empty_trash':
+		//console.log(dataTableAllRowsIDsArray);
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: JSON.stringify(dataTableAllRowsIDsArray) }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_archive_team_member':
+		case 'eversign_archive_contact':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: '{"is_archived": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_unarchive_team_member':
+		case 'eversign_unarchive_contact':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { postArray: '{"is_archived": 0}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_archive_team_members':
+		case 'eversign_archive_contacts':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray, postArray: '{"is_archived": 1}' }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_unarchive_team_members':
+		case 'eversign_unarchive_contacts':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray, postArray: '{"is_archived": 0}' }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_delete_team_member':
+		case 'eversign_delete_contact':
+		case 'eversign_delete_signature_initials':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_delete_contacts':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_change_default_signature_initials':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'resend_confirmation_email':
+		URL = '/php/advanced_ajax_handler.php?type=resend_confirmation_email';
+		showSuccessMessage = true;
+		break;
+	
+		case 'eversign_single_delete_document':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { additional_parameters: '{"trash": 1}' };
+		showSuccessMessage = true;
+						
+			if (currentPage === 'view_document' || currentPage === 'view_template') {
+				
+				var keyword;
+				
+				if (currentPage === 'view_document') {
+				keyword = 'documents';	
+				} else {
+				keyword = 'templates';	
+				}
+					
+				redirect = true;
+				redirectPath = '/'+keyword;	
+				redirectFile = 'eversign.document_list';
+				redirectPage = keyword;
+				redirectType = keyword + '_all';
+				
+			} else {
+				
+				doReloadPage = true;
+				
+			}
+			
+		break;
+	
+		case 'eversign_single_cancel_document':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { additional_parameters: '{"cancel": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+	
+		case 'eversign_archive_document':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { additional_parameters: '{"archive": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+	
+		case 'eversign_unarchive_document':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { additional_parameters: '{"unarchive": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_archive_documents':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { object_array: selectedItemsArray, additional_parameters: '{"archive": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'eversign_unarchive_documents':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+		data = { object_array: selectedItemsArray, additional_parameters: '{"unarchive": 1}' };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+	
+		case 'eversign_send_reminder_to_all':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		
+			if (currentPage === 'view_document') {
+			doReloadPage = true;	
+			}
+			
+		break;
+		
+		case 'eversign_send_reminder_to_signer':
+		case 'eversign_remove_signer':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		doReloadPage = true;	
+		break;
+		
+		case 'eversign_bulk_delete_documents':
+		URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+		data = { object_array: selectedItemsArray, additional_parameters: '{"trash": 1}' }; 
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'enable_ip_signing':
+		case 'disable_ip_signing':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+		
+		case 'delete_api_app':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		doReloadPage = true;
+		break;
+					
+		case 'revoke_app_authorization':
+		URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+		data = { postArray: dataHandlerPostData };
+		showSuccessMessage = true;
+		doReloadPage = true;	
+		break;
+						
+		default:
+		
+	}
+	
+	if (showSuccessMessage === true) {
+	successMessage = ['show', 'success', $(that).attr('data-success-message')];	
+	}
+	
+	if (saveDatatableState === true) {
+	$('[name="load_from_datatables_state"]').val('true');
+	}
+		
+	$.ajax({	
+		type: 'POST',
+		url: URL,
+		data: data,	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(data) {
+				
+			if (data.success == 1) {
+				
+				if (hardRedirectURL) {
+				window.location.href = hardRedirectURL;
+				return false;
+				}
+		
+				if (doReloadPage) {
+				closePopup();
+				reloadPage(successMessage);
+				return false;
+				}
+				
+				if ((type === 'upgrade-plan' || type === 'checkout-change-payment-frequency') && data.message.payment_required == 1) {
+				redirect = true;
+				redirectPath = '/checkout/'+data.message.invoice_id;	
+				redirectFile = 'checkout';
+				redirectPage = 'checkout';
+				redirectID = data.message.invoice_id;
+				}
+				
+				if (redirect) {
+				closePopup();
+				goToPage(redirectPath, redirectFile, redirectPage, redirectType, redirectID, false, successMessage, null);
+				return false;	
+				}
+				
+				if (doRefreshDataTable === true) {
+				refreshDataTable(false, null);
+				}
+								
+				if (showSuccessMessage === true) {
+				generalInfo(successMessage[0], successMessage[1], successMessage[2]);	
+				}
+		
+			} else {
+				
+				/* if user downgrades to Free Plan, action succeeds but system returns error anyway --> reload page in spite of error */
+				if (type === 'downgrade-plan' && doReloadPage) {
+				closePopup();
+				reloadPage(successMessage);
+				return false;
+				}
+				
+				generalInfo('show', 'error', translateError(data.message));
+			}
+			
+			closePopup();
+		
+		}
+
+	});		
+		
+}
+
+
+/* CONFIRMATION POPUPS NAVIGATION */
+$('html').on('keydown', 'body', function(event) {
+	"use strict";
+	
+	var exceptionsByFormName = ['quick_send', 'enable_in_person_signing'];
+		
+    if ($('.x_content.confirmation').length) {
+		
+		var userInInput = false;
+		
+		// check if user currently types within field
+		if ((event.target.type === 'textarea' || event.target.type === 'input' || event.target.type === 'text') && $(event.target).is(':focus')) {
+		userInInput = true;	
+		}
+		
+		/* submit on enter */
+		if (event.keyCode === 13 && userInInput !== true) {
+			
+			// exceptions
+			if ($.inArray($('.x_content').find('button[type="submit"]').attr('form'), exceptionsByFormName) !== -1) {
+			return false;	
+			}
+			
+			event.preventDefault();
+			$('.x_content').find('button[type="submit"]').click();
+				
+		}
+		
+		/* close on ESC */
+    	if (event.keyCode === 27) {
+			event.preventDefault();
+			closePopup();
+		}
+		
+	}
+				  
+});
+
+
+/* DIRECT ACTION CALL - merge the two! */
+$('body').on('click', '[data-direct-action]', function() {
+	'use strict';
+
+	var directActionMode = $(this).attr('data-direct-action');
+
+	ajaxHandlerAction($(this), directActionMode, null);
+	
+});
+
+
+
+/* WAIT FUNCTION */
+$.wait = function(ms) {
+    var defer = $.Deferred();
+    setTimeout(function() { defer.resolve(); }, ms);
+    return defer;
+};
+
+
+/* DATEPICKER FOR MULTIPLE INPUTS */
+function datePicker(identification) {
+	"use strict";
+	
+		/*
+		if (!identification) {
+		return false;	
+		}*/
+		
+		var isDateTag;
+		
+		if ($('[for="'+identification+'"]').hasClass('attach_button')) {
+		isDateTag = true;
+		}
+		
+		var dateFormat;
+		
+		switch (currentDateFormat) {
+			
+			case 'YMd':
+			dateFormat = 'YYYY MMMM DD';
+			break;
+			
+			case 'dMY':
+			dateFormat = 'DD MMMM YYYY';
+			break; 
+			
+			case 'MdY':
+			dateFormat = 'MMMM DD YYYY';
+			break; 
+			
+			case 'Y-m-d':
+			dateFormat = 'YYYY-MM-DD';
+			break; 
+			
+			case 'd-m-Y':
+			dateFormat = 'DD-MM-YYYY';
+			break; 
+			
+			case 'm-d-Y':
+			dateFormat = 'MM-DD-YYYY';
+			break; 
+			
+			case 'd.m.Y':
+			dateFormat = 'DD.MM.YYYY';
+			break; 
+			
+			default:
+			dateFormat = 'YYYY-MM-DD';
+			
+		}
+		
+		new Pikaday({ 
+			field: document.getElementById(identification),
+      		firstDay: 1,
+			format: dateFormat,
+    		minDate: $('#' + identification).attr('data-datepicker') === 'minDate' ? new Date(moment().format("YYYY, MM, DD")) : undefined,
+     		onSelect: function() {
+				
+				if (isDateTag === true) {
+				
+				$('#'+identification).closest('.one_item_line.actual').find('.tag.date').css('display','inline-block');
+				$('#'+identification).closest('.one_item_line.actual').find('.tag.date .filename').html(this.toString());
+				$('#'+identification).closest('.one_item_line.actual').find('.tag.date .filename').attr('data-real-date', this.getMoment().format('YYYY-MM-DD'));
+				
+
+				} else {
+            	$('#'+identification).attr('data-real-date', this.getMoment().format('YYYY-MM-DD'));
+				}
+        	}
+		});
+		
+}
+
+function getTodaysDate() {
+	"use strict";
+	
+	var d = new Date();
+
+	var month = d.getMonth()+1;
+	var day = d.getDate();
+
+	var output = d.getFullYear() + '-' +
+    	((''+month).length<2 ? '0' : '') + month + '-' +
+    	((''+day).length<2 ? '0' : '') + day;
+	
+	return output;
+
+}
+
+function fireDatePicker(singleID) {
+	"use strict";
+		
+	if (singleID) {
+			datePicker(singleID);
+	} else {
+		$('.datepicker').each(function() {
+			datePicker($(this).attr('id'));		
+		});
+	}
+}
+
+
+
+
+/* DYNAMICALLY CALL TIPR PLUGIN */
+function fireTiprPlugin() {
+"use strict";
+
+	$('body').find('.tipr').each(function() {
+     	$(this).tipr();
+	});
+	$('body').find('.tiprtop').each(function() {
+     $(this).tipr({
+          'mode': 'top'
+    });
+    });
+}
+
+
+
+
+/* SERIALIZE FORM TO JSON */
+(function ($) {
+    $.fn.serializeFormJSON = function () {
+
+        var o = {};
+        var a = this.serializeArray();
+        $.each(a, function () {
+            if (o[this.name]) {
+                if (!o[this.name].push) {
+                    o[this.name] = [o[this.name]];
+                }
+                o[this.name].push(this.value || '');
+            } else {
+                o[this.name] = this.value || '';
+            }
+        });
+        return o;
+    };
+})(jQuery);
+
+
+/* VALIDATE FORM FIELDS FUNCTION */
+function validateFormFields(form) {
+	'use strict';
+	
+	var error;
+	
+	$(form).find('[data-validate="required"]:visible').each(function() {
+	
+		if (!$(this).val()) {
+		$(this).addClass('error');
+		error = true;	
+		} else {
+		$(this).removeClass('error');	
+		}
+	
+	});
+	
+	$(form).find('[data-validate="email"]:visible').each(function() {
+	
+		if (!isValidEmailAddress($(this).val())) {
+		$(this).addClass('error');
+		error = true;	
+		} else {
+		$(this).removeClass('error');	
+		}
+	
+	});
+	
+	$(form).find('[data-validate="url"]:visible').each(function() {
+	
+		// Paul added the is_valid_localhost_url function on Nov 2 2017 
+		if (!is_valid_localhost_url($(this).val()) && !is_valid_url($(this).val())) {
+		$(this).addClass('error');
+		error = true;	
+		} else {
+		$(this).removeClass('error');	
+		}
+	
+	});
+	
+	if (error === true) {
+		
+		if ($(form).hasClass('x_form')) {
+		popupInfo('show', 'error', 'There were errors. Please try again.');
+		} else {
+		generalInfo('show', 'error', 'There were errors. Please amend all required fields and try again.');
+		}
+	
+	return false;
+		
+	} else {
+	generalInfo('hide');
+	}
+	
+	return true;
+		
+}
+
+
+/* TRANSLATE API ERROR MESSAGES */
+function translateError(errorMessage) {
+	'use strict';
+	
+	var translatedErrorMessage;
+	
+	switch (errorMessage) {
+	
+		case 'invalid_email_address':
+		translatedErrorMessage = 'You have specified an invalid email address.';
+		break;
+		
+		case 'business_identifier_exists':
+		translatedErrorMessage = 'This Vanity URL (sub domain) is already taken.';
+		break;
+		
+		case 'invalid_password':
+		translatedErrorMessage = 'Sorry, we could not find an account with that email/password combination.';
+		break;
+		
+		case 'invalid_password_invoiceable':
+		translatedErrorMessage = 'Invalid Password. We have just sent you an e-mail with your new invoiceable import password. Please check your e-mail inbox and try again with the new password.';
+		break;
+		
+		case 'missing_email':
+		translatedErrorMessage = 'Please enter a valid email address.';
+		break;
+		
+		case 'invoiceable_user_not_found':
+		translatedErrorMessage = 'Sorry, we could not find an Invoiceable account with that email/password combination.';
+		break;
+		
+		case 'missing_statement_send_subject':
+		translatedErrorMessage = 'Please enter custom email subject.';
+		break;
+		
+		case 'missing_statement_send_content':
+		translatedErrorMessage = 'Please enter custom email message.';
+		break;
+		
+		case 'missing_card_object':
+		translatedErrorMessage = 'Please enter your credit card details.';
+		break;
+		
+		case 'action_not_permitted':
+		translatedErrorMessage = 'You do not have the required permissions to do this.';
+		break;
+		
+		case 'invalid_value_for_custom_domain':
+		translatedErrorMessage = 'Please enter a valid custom domain. Our systems failed detecting your CNAME records.';
+		break;
+		
+		case 'invalid_connection_id':
+		case 'missing_connection_id':
+		translatedErrorMessage = 'Please specify a client/vendor.';
+		break;
+		
+		case 'invalid_address_1':
+		translatedErrorMessage = 'Please enter a valid address.';
+		break;
+		
+		case 'duplicate_statement_id':
+		translatedErrorMessage = 'A statement with this number already exists. Please enter a different statement number.';
+		break;
+		
+		case 'import_already_performed':
+		translatedErrorMessage = 'It seems like your data has already been imported. In case you are looking to import your data once more, please make sure to clear out all invoices from your invoicely account and retry your import.';
+		break;
+		
+		case 'invalid_statement_recurring_start_date':
+		translatedErrorMessage = 'The Start Date you entered for your recurring profile is invalid.';
+		break;
+		
+		case 'invalid_recurring_frequency_number':
+		translatedErrorMessage = 'The Frequency you entered for your recurring profile is invalid.';
+		break;
+	
+		case 'invalid_statement_recurring_due_after':
+		translatedErrorMessage = 'The Due Date (or days) you entered for your recurring profile is invalid.';
+		break;
+		
+		case 'invalid_recurring_profile_name':
+		translatedErrorMessage = 'The Profile Name you entered for your recurring profile is invalid.';
+		break;
+		
+		case 'invalid_statement_date':
+		translatedErrorMessage = 'The Date you entered is invalid.';
+		break;
+		
+		case 'invalid_statement_status':
+		translatedErrorMessage = 'An error with the reference "invalid_statement_status" occurred. Please try again or contact support for assistance.';
+		break;
+		
+		case 'no_recipients':
+		translatedErrorMessage = 'Please enter at least one valid recipient.';
+		break;
+		
+		case 'invalid_payment_date':
+		translatedErrorMessage = 'Please enter a valid payment date.';
+		break;
+		
+		case 'external_email_urls_not_supported_on_free_plan':
+		translatedErrorMessage = 'External hyperlinks in emails are not allowed on the Free Plan.';
+		break;
+		
+		case 'missing_signers':
+		translatedErrorMessage = 'Please enter at least one signer.';
+		break;
+		
+		case 'team_member_exists':
+		translatedErrorMessage = 'Error: This team member already exists.';
+		break;
+		
+		case 'not_permitted_to_edit:access_type':
+		translatedErrorMessage = 'You are not permitted to make this change. (Error Reference: not_permitted_to_edit:access_type)';
+		break;
+		
+		case 'contact_already_exists':
+		translatedErrorMessage = 'Error: This contact already exists.';
+		break;
+		
+		case 'No eligible signers found.':
+		translatedErrorMessage = 'A reminder for this document has been sent today. Please wait until tomorrow before sending another reminder.';
+		break;
+		
+		case 'template_limit_reached':
+		translatedErrorMessage = 'You have reached the maximum of allowed templates for your account. Please upgrade your subscription to a higher plan in order to save this template.';
+		break;
+		
+		case 'email_not_confirmed':
+		translatedErrorMessage = 'Your email address has not been confirmed yet. Please check your email inbox and click on the activation link in order to access all eversign features.';
+		break;
+		
+		case 'No required signer roles specified. Please specify at least one required signer role.':
+		translatedErrorMessage = 'No required signer roles specified. Please specify at least one required signer role.';
+		break;
+		
+		case 'missing_dropdown_options':
+		translatedErrorMessage = 'At least one dropdown field has no options specified. Please add at least one option to dropdown fields.';
+		break;
+				
+		case 'statement_notes_too_long':
+		translatedErrorMessage = 'Your statement note is too long. Please shorten it and retry.';
+		break;
+		
+		case 'missing_file_content':
+		translatedErrorMessage = 'One or more document files could not be uploaded. Please try again.';
+		break;
+				
+		case 'document_limit_reached':
+		translatedErrorMessage = 'You have reached your limit of allowed documents for this month. Please <a style="color: #fff; text-decoration: underline; display: inline-block; margin-left: 5px; margin-right: 5px;" target="_blank" title="Upgrade your subscription" href="/subscription">upgrade your account</a> to continue.';
+		break;
+				
+		default:
+		translatedErrorMessage = 'An error occurred. Please try again or contact support. (Error Reference: ' + errorMessage + ')';
+		break;
+	
+	}
+	
+	return translatedErrorMessage;
+	
+}
+
+
+/* SUBMIT FORM */
+$('body').on('submit', '[data-submit-form]', function(event) {
+	"use strict";
+	event.preventDefault();
+
+	var URL;
+	var serializeForm;
+	var customPostData;
+
+	var showCustomFields;
+	
+	var successMessage = ['show', 'success', $(this).attr('data-success-message')];
+	
+	var DoRefreshDataTable;
+	var DoClosePopup;
+	
+	var doSaveCategory;
+	var saveCategoryChecked;
+	var saveCategoryType;
+	var saveCategoryName;
+	var saveCategoryRate;
+	
+	var includeTags;	
+	var includeFiles;
+	
+	var insertConnection;
+	var insertConnectionData;
+	
+	var doReloadPage = $(this).attr('data-reload-page');
+	var doReloadPageOnError = $(this).attr('data-reload-on-error');
+	
+	var redirect = $(this).attr('data-redirect');
+	var redirectPath = $(this).attr('data-redirect-path');
+	var redirectFile = $(this).attr('data-redirect-file');
+	var redirectPage = $(this).attr('data-redirect-page');
+	var redirectType = $(this).attr('data-redirect-type');
+	var redirectID = $(this).attr('data-redirect-id');
+	
+	var hardRedirectURL;
+	
+	var dataHandlerAction = $(this).attr('data-handler-action');
+	var dataHandlerEndpoint = $(this).attr('data-handler-endpoint');
+	var dataObjectID = $(this).attr('data-object-id');
+	var dataHandlerAdditionalParameters = $(this).attr('data-handler-additional-parameters');
+	
+	var that = $(this);
+	
+	/* check if popup */
+	var isPopup = false;
+	
+	if ($(this).closest('form').hasClass('x_form')) {
+	isPopup = true;
+	}
+	/* check if popup */
+	
+	var dataSubmitForm = $(this).attr('data-submit-form');
+	var dataSubmitFormRedirect = $(this).attr('data-submit-form-redirect');
+	
+	var saveDatatableState;
+	
+	switch (dataSubmitForm) {
+	
+	case 'new_connection':
+	case 'edit_connection':
+	case 'business_profile':
+	/* eversign */
+	case 'new_contact':
+	case 'edit_contact':
+	/* eversign */
+	URL = '/php/advanced_ajax_handler.php?type='+dataHandlerEndpoint+'&id='+dataObjectID;
+	serializeForm = true;
+	showCustomFields = true;
+	break;
+	
+	case 'new_team_member':
+	case 'edit_team_member':
+	URL = '/php/advanced_ajax_handler.php?type='+dataHandlerEndpoint+'&id='+dataObjectID;
+	serializeForm = true;
+	showCustomFields = true;
+	redirect = true;
+	redirectPath = '/team';
+	redirectFile = 'team';
+	redirectPage = 'team';
+	break;
+	
+	case 'new_connection_contact':
+	case 'edit_connection_contact':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	serializeForm = true;
+	DoRefreshDataTable = true;
+	DoClosePopup = true;
+	break;
+	
+	case 'new_statement_payment':
+	case 'edit_statement_payment':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	DoRefreshDataTable = true;
+	DoClosePopup = true;
+	customPostData = {
+		statement_hash: $(this).find('[name="create_edit_statement_payment[statement_hash]"]').val(),
+		payment_status: 'completed',
+		payment_date: $(this).find('[name="create_edit_statement_payment[date]"]').attr('data-real-date'),
+		payment_type: $(this).find('[name="create_edit_statement_payment[type]"]').val(),
+		payment_amount: $(this).find('[name="create_edit_statement_payment[amount]"]').val(),
+		payment_details: $(this).find('[name="create_edit_statement_payment[details]"]').val(),
+		object_links : {
+			files: [],
+			tags: [],	
+		}
+	};
+	includeTags = true;
+	includeFiles = true;
+	break;
+	
+	case 'new_track_time':
+	case 'new_track_expense':
+	case 'new_track_mileage':
+	case 'edit_track_time':
+	case 'edit_track_expense':
+	case 'edit_track_mileage':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	//DoRefreshDataTable = true;
+	DoClosePopup = true;
+	customPostData = {
+		connection_id: $(this).find('[name="client_id"]').val(),
+		tracker_type: $(this).find('[name="new_track_entry[type]"]').val(),
+		category_name: $(this).find('[name="new_track_entry[name]"]').val(),
+		category_rate: $(this).find('[name="new_track_entry[rate]"]').val(),
+		category_save: $(this).find('[name="new_track_entry[save]"]').is(':checked') ? 1 : 0,
+		tracker_date: $(this).find('[name="new_track_entry[date]"]').attr('data-real-date'),
+		tracker_description: $(this).find('[name="new_track_entry[description]"]').val(),	
+		tracker_amount: $(this).find('[name="new_track_entry[quantity]"]').attr('data-total-minutes') ? $(this).find('[name="new_track_entry[quantity]"]').attr('data-total-minutes') : $(this).find('[name="new_track_entry[quantity]"]').val(),	
+		object_links : {
+			files: [],
+			tags: [],	
+		}
+	};	
+	includeTags = true;
+	includeFiles = true;
+	doSaveCategory = true;
+	saveCategoryChecked = $(this).find('[name="new_track_entry[save]"]:checked').is(':visible') ? true : false;
+	saveCategoryType = $(this).find('[name="new_track_entry[type]"]').val();
+	saveCategoryName = $(this).find('[name="new_track_entry[name]"]').val();
+	saveCategoryRate = $(this).find('[name="new_track_entry[rate]"]').val();
+	/* if edit, reload from datatable state */
+	if (dataHandlerAction === 'edit') {
+	saveDatatableState = true;	
+	}
+	doReloadPage = true;
+	break;
+	
+	case 'new_client':
+	case 'new_vendor':
+	case 'edit_client':
+	case 'edit_vendor':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	DoClosePopup = true;
+	customPostData = {
+        connection_type: $(this).find('[name="connection_type"]:checked').val(),
+        first_name: $(this).find('[name="connection[first_name]"]:enabled').val(),
+        last_name: $(this).find('[name="connection[last_name]"]:enabled').val(),
+        company_name: $(this).find('[name="connection[organization_name]"]').val(),
+        default_currency: $(this).find('[name="connection[currency]"]').val().toUpperCase(),
+        default_language: $(this).find('[name="connection[language]"]').val(),
+        email_address: $(this).find('[name="connection[email_address]"]').val(),
+        address_1: $(this).find('[name="connection[street_1]"]').val(),
+        address_2: $(this).find('[name="connection[street_2]"]').val(),
+        city: $(this).find('[name="connection[city]"]').val(),
+        state: $(this).find('[name="connection[state]"]').val(),
+        zip_code: $(this).find('[name="connection[postal_code]"]').val(),
+        country_code: $(this).find('[name="connection[country]"]').val(),
+        phone_number: $(this).find('[name="connection[phone]"]').val(),
+        fax_number: $(this).find('[name="connection[fax]"]').val(),
+		tax_id: $(this).find('[name="connection[tax_id]"]').val(),
+		notes: $(this).find('[name="notes"]').val(),
+        website_url: $(this).find('[name="connection[website_url]"]').val(),
+		custom_fields: {},
+	};
+	showCustomFields = true;
+	insertConnection = true;
+	break;
+	
+	case 'new_saved_item':
+	case 'new_saved_task':
+	case 'new_saved_expense':
+	case 'new_saved_trip':
+	case 'new_saved_tag':
+	case 'edit_saved_item':
+	case 'edit_saved_task':
+	case 'edit_saved_expense':
+	case 'edit_saved_trip':
+	case 'edit_saved_tag':
+		
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	DoClosePopup = true;
+	
+	if ($('body').find('[data-table="table"]').length) {
+		DoRefreshDataTable = true;
+	}
+	
+	if ($(this).attr('data-category-type') === 'item') {
+		customPostData = {
+		name: $(this).find('[name="create_edit_category[name]"]').val(),
+		description: $(this).find('[name="create_edit_category[description]"]').val(),		
+		price: $(this).find('[name="create_edit_category[rate]"]').val() == 0 ? '' : $(this).find('[name="create_edit_category[rate]"]').val(), 
+		unit: $(this).find('[name="create_edit_category[custom_unit]"]').val() ? $(this).find('[name="create_edit_category[custom_unit]"]').val() : $(this).find('[name="create_edit_category[unit]"]').val(),
+		};
+	} else {
+		customPostData = {
+		name: $(this).find('[name="create_edit_category[name]"]').val(),
+		description: $(this).find('[name="create_edit_category[description]"]').val(),		
+		rate: $(this).find('[name="create_edit_category[rate]"]').val() == 0 ? '' : $(this).find('[name="create_edit_category[rate]"]').val(), 
+		unit: $(this).find('[name="create_edit_category[custom_unit]"]').val() ? $(this).find('[name="create_edit_category[custom_unit]"]').val() : $(this).find('[name="create_edit_category[unit]"]').val(),
+		};
+	}
+	
+	break;
+	
+	case 'new_statement_comment':
+	case 'edit_statement_comment':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	serializeForm = true;
+	DoRefreshDataTable = true;
+	DoClosePopup = true;
+	break;
+	
+	case 'payment_integrations':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	serializeForm = true;
+	break;
+	
+	case 'graphics':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	serializeForm = true;
+	break;
+	
+	case 'business_settings':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	serializeForm = true;
+	
+	/* do redirect to new vanity URL only if vanity URL was changed */
+	if ($(this).find('[name="business_identifier"]').val() !== $(this).find('[name="business_identifier"]').attr('data-current')) {
+	hardRedirectURL = 'https://'+$(this).find('[name="business_identifier"]').val()+'.invoicely.com/settings';
+	}
+	
+	break;
+	
+	case 'new_payment_method':
+	URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+	serializeForm = true;
+	DoClosePopup = true;
+	doReloadPage = true;
+	break;
+	
+	case 'switch_payment_method':
+	URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+	customPostData = {
+		profile_id: $(this).find('[name="payment_methods"]:checked').val()	
+	};
+	break;
+	
+	case 'checkout_existing_payment_method':
+	/* do not do dataReloadPage if PayPal is submitted */
+	if ($(this).find('[name="payment_methods"]:checked').attr('data-payment-type') === 'paypal') {
+	doReloadPage = false;
+	}
+	/* do not do dataReloadPage if PayPal is submitted */
+	
+	URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+	customPostData = {
+		invoice_id: $(this).find('[name="invoice_id"]').val(),
+		profile_id: $(this).find('[name="payment_methods"]:checked').val()	
+	};
+	break;
+	
+	case 'checkout_new_payment_method':
+	URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+	serializeForm = true;
+	break;
+	
+	case 'account_details':
+	URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+	serializeForm = true;
+	break;
+	
+	case 'send_statement':
+	URL = '/php/advanced_ajax_handler.php?&type='+dataHandlerEndpoint;
+	serializeForm = true;
+	break;
+	
+	case 'invoiceable_import':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	serializeForm = true;
+	break;
+	
+	case 'popup_contact_form':
+	URL = '/php/public_ajax_handler.php?type='+dataHandlerEndpoint;
+	customPostData = {
+		name: $(this).find('[name="first_name"]').val() + ' ' + $(this).find('[name="last_name"]').val(),
+		email_address: $(this).find('[name="email_address"]').val(),
+		subject: $(this).find('[name="subject"]').val(),
+		message: $(this).find('[name="message"]').val()	
+	};
+	DoClosePopup = true;
+	break;
+	
+	case 'general_preferences':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	customPostData = {
+		default_language: $(this).find('[name="default_language"]').val(),
+		default_currency: $(this).find('[name="default_currency"]').val().toUpperCase(),	
+		number_format: $(this).find('[name="number_format"]').val(),
+		decimal_places: $(this).find('[name="decimal_places"]').val(),
+		date_format: $(this).find('[name="date_format"]').val(),
+		time_format: $(this).find('[name="time_format"]').val(),	
+		currency_format: $(this).find('[name="currency_format"]').val(),
+		currency_position: $(this).find('[name="currency_position"]').val(),
+		mileage_unit: $(this).find('[name="mileage_unit"]').val(),
+		fiscal_year_start: $(this).find('[name="fiscal_year_start"]').val(),
+		paper_size: $(this).find('[name="paper_size"]').val(),	
+		receipt_number_prefix: $(this).find('[name="receipt_number_prefix"]').val(),	
+		statement_list_default_tab_invoices: $(this).find('[name="statement_list_default_tab_invoices"]').val(),	
+		statement_list_default_tab_bills: $(this).find('[name="statement_list_default_tab_bills"]').val(),	
+		statement_list_default_tab_estimates: $(this).find('[name="statement_list_default_tab_estimates"]').val(),	
+		custom_domain: $(this).find('[name="custom_domain"]').val(),	
+		show_branding: $(this).find('[name="show_branding"]').prop('checked') === true ? 1 : 0,
+	};
+	break;
+	
+	case 'statement_preferences':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	customPostData = {
+		default_invoice_due: $(this).find('[name="default_invoice_due"]').val(),
+		invoice_always_attach_pdf: $(this).find('[name="invoice_always_attach_pdf"]').prop('checked') === true ? 1 : 0,
+		invoice_always_send_payment_reminders: $(this).find('[name="invoice_always_send_payment_reminders"]').prop('checked') === true ? 1 : 0,
+		invoice_always_bcc: $(this).find('[name="invoice_always_bcc"]').prop('checked') === true ? 1 : 0,
+		invoice_always_send_alerts: $(this).find('[name="invoice_always_send_alerts"]').prop('checked') === true ? 1 : 0,
+		invoice_always_send_payment_receipts: $(this).find('[name="invoice_always_send_payment_receipts"]').prop('checked') === true ? 1 : 0,
+		invoice_always_allow_partial_payments: $(this).find('[name="invoice_always_allow_partial_payments"]').prop('checked') === true ? 1 : 0,
+		default_estimate_valid: $(this).find('[name="default_estimate_valid"]').val(),
+		estimate_always_attach_pdf: $(this).find('[name="estimate_always_attach_pdf"]').prop('checked') === true ? 1 : 0,
+		estimate_always_send_expiration_reminders: $(this).find('[name="estimate_always_send_expiration_reminders"]').prop('checked') === true ? 1 : 0,
+		estimate_always_bcc: $(this).find('[name="estimate_always_bcc"]').prop('checked') === true ? 1 : 0,
+		estimate_always_send_alerts: $(this).find('[name="estimate_always_send_alerts"]').prop('checked') === true ? 1 : 0,
+		default_bill_due: $(this).find('[name="default_bill_due"]').val(),
+		enable_public_account_statement: $(this).find('[name="enable_public_account_statement"]').prop('checked') === true ? 1 : 0,
+		statement_show_country: $(this).find('[name="statement_show_country"]').prop('checked') === true ? 1 : 0,
+		address_format: $(this).find('[name="address_format"]').val(),
+	};
+	break;
+	
+	/* EVERSIGN */
+	
+	case 'eversign_new_team_member':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	serializeForm = true;
+	redirect = true;
+	redirectPath = '/team';
+	redirectFile = 'eversign.team';
+	redirectPage = 'team';
+	break;
+	
+	case 'eversign_edit_team_member':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	serializeForm = true;
+	redirect = true;
+	redirectPath = '/team';
+	redirectFile = 'eversign.team';
+	redirectPage = 'team';
+	break;
+	
+	case 'eversign_new_contact':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	serializeForm = true;
+	redirect = true;
+	redirectPath = '/contacts';
+	redirectFile = 'eversign.contacts';
+	redirectPage = 'contacts';
+	break;
+	
+	case 'eversign_edit_contact':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction+'&object_id='+dataObjectID;
+	serializeForm = true;
+	doReloadPage = true;
+	break;
+		
+	case 'document_preferences':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	customPostData = {
+		document_require_all_signers_default_option: $(this).find('[name="all_signatures_required"]').prop('checked') === true ? 1 : 0,
+		default_template_permission: $(this).find('[name="default_template_permission"]').prop('checked') === true ? 2 : 1,
+		date_format: $(this).find('[name="date_format"]').val(),
+		time_format: $(this).find('[name="time_format"]').val(),
+		default_time_zone: $(this).find('[name="default_time_zone"]').val(),
+		default_language: $(this).find('[name="default_language"]').val(),
+		document_list_default_tab: $(this).find('[name="document_list_default_tab"]').val(),
+		enable_contact_autocomplete: $(this).find('[name="enable_contact_autocomplete"]').prop('checked') === true ? 1 : 0,
+		enable_ui_hidden_tag_option: $(this).find('[name="enable_ui_hidden_tag_option"]').prop('checked') === true ? 1 : 0,
+		enable_third_party_upload: $(this).find('[name="enable_third_party_upload"]').prop('checked') === true ? 1 : 0,
+	};
+	break;
+	
+	case 'signing_preferences':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	customPostData = {
+		enable_document_status_page: $(this).find('[name="enable_status_page"]').prop('checked') === true ? 1 : 0,
+		signing_page_show_parties_email_addresses: $(this).find('[name="signing_page_show_parties_email_addresses"]').prop('checked') === true ? 1 : 0,
+		allow_signers_to_view_attachments: $(this).find('[name="allow_signers_view_attachments"]').prop('checked') === true ? 1 : 0,
+		require_signatures_separately: $(this).find('[name="require_signatures_separately"]').prop('checked') === true ? 1 : 0,
+		disable_user_uncompleted_document_download: $(this).find('[name="disable_user_uncompleted_document_download"]').prop('checked') === true ? 1 : 0,
+		allow_signer_document_forwarding: $(this).find('[name="allow_signer_document_forwarding"]').prop('checked') === true ? 1 : 0,
+		allow_signer_document_decline: $(this).find('[name="allow_signer_document_decline"]').prop('checked') === true ? 1 : 0,
+		allow_signature_type_drawn: $(this).find('[name="allow_drawn_signatures"]').prop('checked') === true ? 1 : 0,
+		allow_signature_type_typed: $(this).find('[name="allow_typed_signatures"]').prop('checked') === true ? 1 : 0,
+		allow_signature_type_uploaded: $(this).find('[name="allow_uploaded_signatures"]').prop('checked') === true ? 1 : 0,
+		enable_legal_disclosure: $(this).find('[name="enable_legal_disclosure"]').prop('checked') === true ? 1 : 0,
+		require_decline_reason: $(this).find('[name="require_decline_reason"]').prop('checked') === true ? 1 : 0,
+		show_eversign_signup_form_when_completed: $(this).find('[name="show_eversign_signup_form_when_completed"]').prop('checked') === true ? 1 : 0,
+		legal_disclosure_content: $(this).find('[name="custom_disclaimer"]').val(),
+		post_sign_redirection_url_document_completed: $(this).find('[name="post_signature_completion_redirect_url"]').val(),
+		post_sign_redirection_url_decline: $(this).find('[name="post_signature_decline_redirect_url"]').val(),
+	};
+	break;
+	
+	case 'delivery_preferences':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	customPostData = {
+		email_enable_pdf_attachment: $(this).find('[name="email_enable_pdf_attachment"]').prop('checked') === true ? 1 : 0,
+		do_not_email_embedded_signers: $(this).find('[name="do_not_email_embedded_signers"]').prop('checked') === true ? 1 : 0,
+		send_completion_emails_to_embedded_signers: $(this).find('[name="send_completion_emails_to_embedded_signers"]').prop('checked') === true ? 1 : 0,
+		document_attach_completion_certificate: $(this).find('[name="document_attach_completion_certificate"]').prop('checked') === true ? 1 : 0,
+		contact_button_email_type: $(this).find('[name="contact_button_email_type"]').val(),
+		do_not_send_document_signed_emails: $(this).find('[name="do_not_send_document_signed_emails"]').prop('checked') === true ? 1 : 0,
+		document_opened_notifications_enabled: $(this).find('[name="document_opened_notifications_enabled"]').prop('checked') === true ? 1 : 0,
+		do_not_send_document_expired_emails_signers: $(this).find('[name="do_not_send_document_expired_emails_signers"]').prop('checked') === true ? 1 : 0,
+		do_not_send_document_cancelled_emails_signers: $(this).find('[name="do_not_send_document_cancelled_emails_signers"]').prop('checked') === true ? 1 : 0,
+		do_not_send_document_forwarded_emails_signers: $(this).find('[name="do_not_send_document_forwarded_emails_signers"]').prop('checked') === true ? 1 : 0,
+		do_not_send_document_completed_emails_signers: $(this).find('[name="do_not_send_document_completed_emails_signers"]').prop('checked') === true ? 1 : 0,
+		document_completed_notifications_enabled: $(this).find('[name="document_completed_notifications_enabled"]').prop('checked') === true ? 1 : 0,
+		document_signed_notifications_enabled: $(this).find('[name="document_signed_notifications_enabled"]').prop('checked') === true ? 1 : 0,
+		document_declined_notifications_enabled: $(this).find('[name="document_declined_notifications_enabled"]').prop('checked') === true ? 1 : 0,
+		document_forwarded_notifications_enabled: $(this).find('[name="document_forwarded_notifications_enabled"]').prop('checked') === true ? 1 : 0,
+	};
+	break;
+	
+	case 'expiration_reminders':
+	URL = '/php/ajax_handler.php?endpoint='+dataHandlerEndpoint+'&action_type='+dataHandlerAction;
+	customPostData = {
+		enable_expiration_reminders: $(this).find('[name="enable_expiration_reminders"]').prop('checked') === true ? 1 : 0,
+		default_document_expiration: $(this).find('[name="custom_expiration_period"]').val(),
+		expiration_reminder_timing_days: $(this).find('[name="send_expiration_reminder_period"]').val(),
+		allow_user_override_expiration_settings: $(this).find('[name="allow_user_override_expiration_settings"]').prop('checked') === true ? 1 : 0,
+		enable_reminders: $(this).find('[name="enable_auto_reminders"]').prop('checked') === true ? 1 : 0,
+		first_reminder_timing_days: $(this).find('[name="first_reminder_period"]').val(),
+		second_reminder_timing_days: $(this).find('[name="second_reminder_period"]').val(),
+	};
+	break;
+		
+	case 'user_settings':
+	URL = '/php/ajax_handler.php?endpoint=user_setting&action_type='+dataHandlerAction;
+	customPostData = {
+		date_format: $(this).find('[name="date_format"]').val(),
+		time_format: $(this).find('[name="time_format"]').val(),
+		default_time_zone: $(this).find('[name="default_time_zone"]').val(),
+		notification_document_opened_by_signer: $(this).find('[name="notification_document_opened_by_signer"]').prop('checked') === true ? 1 : 0,
+		notification_daily_outstanding_summary: $(this).find('[name="notification_daily_outstanding_summary"]').prop('checked') === true ? 1 : 0,
+		show_all_signatures_in_signer_popup: $(this).find('[name="show_all_signatures_in_signer_popup"]').prop('checked') === true ? 1 : 0,
+	};
+	break;
+	
+	case 'create_api_app':
+	case 'edit_api_app':
+	URL = '/php/advanced_ajax_handler.php?type='+dataHandlerAction;
+	customPostData = {
+		application_id: dataObjectID,
+		app_name: $(this).find('[name="oauth_app_name"]').val(),
+		app_domain: $(this).find('[name="oauth_app_domain"]').val(),
+		terms_of_use_url: $(this).find('[name="oauth_tos_url"]').val(),
+		privacy_policy_url: $(this).find('[name="oauth_privacy_url"]').val(),
+		oauth_callback_url: $(this).find('[name="oauth_callback_url"]').val(),
+		saas_webhook_url: $(this).find('[name="oauth_webhook_url"]').val(),
+		saas_eversign_charge_type: $(this).find('[name="oauth_billing"]:checked').val(),
+	};
+	doReloadPage = true;
+	DoClosePopup = true;
+	break;
+			
+	} 
+	
+	/* remove or hide all general/popup info messages */
+	if (isPopup === true) { 
+		popupInfo('hide', null, null);
+	} else {
+		generalInfo('hide', null, null);
+	}
+	
+	/* form validation */
+	if(!validateFormFields($(this))) {
+		return false;	
+	}
+		
+	/* if no error, show loading animation */
+	$('[data-form-id="'+$(this).attr('id')+'"]').addClass('loading');
+	$('[form="'+$(this).attr('id')+'"]').addClass('loading');
+	
+	var postData;
+	
+	if (serializeForm === true) {
+		postData = $(this).serializeFormJSON();
+		//console.log(postData);
+	} else {
+		
+		postData = customPostData;
+		//console.log(postData);
+		
+		/* TAGS */
+		if (includeTags === true) {
+		
+		$(this).find('[data-tag-info="name"]').each(function() {
+		postData.object_links.tags.push($(this).val());
+		});
+		
+		}
+		/* TAGS */
+		
+		/* FILES */
+		if (includeFiles === true) {
+		
+		$(this).find('[data-file-id]').each(function() {
+		if (!$(this).attr('data-file-id')) {
+		// jQuery's equivalent for "continue"
+		return true;	
+		}
+		postData.object_links.files.push($(this).attr('data-file-id'));
+		});
+	
+		}
+		/* FILES */
+		
+	}
+	
+	if (showCustomFields === true) {
+		/* adjust array for custom fields submission */
+		postData.custom_fields = {};
+	
+		$(this).find('.custom_field_container').each(function () {
+		
+		var fieldName = $(this).find('.double_input.first').val();
+		var fieldValue = $(this).find('.double_input.second').val();
+	
+		if (fieldName) {
+			postData.custom_fields[fieldName] = fieldValue;
+		}
+	
+		});
+		/* adjust array for custom fields submission */
+	}
+	
+	var postDataJSON = JSON.stringify(postData);
+	//console.log(postDataJSON);
+	
+	if (saveDatatableState === true) {
+	$('[name="load_from_datatables_state"]').val('true');
+	}
+
+			
+	$.ajax({	
+		type: "POST",
+		url: URL,
+		data: ({ postArray: postDataJSON, additional_parameters: dataHandlerAdditionalParameters }),	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(data){
+						
+			/* remove loading */
+			$('[data-form-id="'+$(that).attr('id')+'"]').removeClass('loading');
+			$('[form="'+$(that).attr('id')+'"]').removeClass('loading');
+			
+			if (data.success == 1) {
+				
+				/* for invoiceable import */
+				if (dataSubmitForm === 'invoiceable_import') {
+					$('#container .announcement p a').html('Import Finished');
+					$('#container .announcement p a').attr('data-finished', 'true');
+					$('#container .announcement p a').css('background', '#3da07b');
+					$('button#start_import').html('Import Finished');
+					$('form#invoiceable_import').css('opacity', 0.5);
+					$('form#invoiceable_import input').attr('disabled', true);
+					$('form#invoiceable_import').css('cursor', 'default');
+					$('form#invoiceable_import').css('pointer-events', 'none');
+					$('form#invoiceable_import input').val('');
+					$('button#start_import').css('background', '#3da07b');
+					$('.announcement_content').slideUp(100);
+					return false;
+				}
+				/* for invoiceable import */
+				
+				/* if user switches payment method to paypal, hard redirect to paypal url */
+				if ((dataSubmitForm === 'switch_payment_method' || dataSubmitForm === 'checkout_existing_payment_method') && data.message.redirect_url) {
+					hardRedirectURL = data.message.redirect_url;
+				}
+				
+				/* now for create client only, may have to be adjusted for future redirects... */
+				if (dataSubmitForm === 'new_connection') {
+					if (data.message.connection_id) {
+					redirectID = data.message.connection_id;
+					redirectPath = redirectPath + redirectID;
+					}
+					refreshStatementConnectionContacts(data.message.connection_id);
+				}
+				/* now for create client only, may have to be adjusted for future redirects... */
+						
+				if (DoClosePopup === true) {
+					closePopup();	
+				}
+								
+				/* hard redirect */
+				if (hardRedirectURL) {
+					window.location.href = hardRedirectURL;
+					return false;
+				}
+				
+				/* refresh current page */
+				if (doReloadPage) {
+					reloadPage(successMessage);
+					return false;
+				}
+								
+				/* normal redirect */
+				if (redirect) {
+										
+					// if the page path IS NOT the current 
+					if (redirectPath !== window.location.pathname) {
+					goToPage(redirectPath, redirectFile, redirectPage, redirectType, redirectID, false, successMessage, null);	
+					} else {
+					// if the page type IS the current
+						if (successMessage) {
+						generalInfo(successMessage[0], successMessage[1], successMessage[2]);	
+						}
+					
+						if (DoRefreshDataTable === true) {
+						refreshDataTable(false, null);	
+						}
+					}
+					
+				} 
+				
+				/* insert connection into statement */
+				if (insertConnection === true) {
+																									
+					var appendContent = '<div class="autocomplete_card"><a class="close_icon"></a><p>'+data.message.address_html+'</p></div>';
+									
+					$('[data-autocomplete="connection"]').hide();
+					$('[data-autocomplete="connection"]').closest('[data-identifier="autocomplete_wrapper"]').find('input[name="client_id"]').val(data.message.connection_id);
+					$('[data-autocomplete="connection"]').closest('[data-identifier="autocomplete_wrapper"]').find('.autocomplete_card').remove();
+					$('[data-autocomplete="connection"]').parent().append(appendContent);
+					
+					newOrEditClient();
+					
+				}
+				
+				if (successMessage && !redirect) {
+				// if no redirect && an alert message
+					generalInfo(successMessage[0], successMessage[1], successMessage[2]);	
+				} 
+				
+				if (DoRefreshDataTable === true && !redirect) {
+					refreshDataTable(false, null);	
+				}
+				
+				// save category
+				if (doSaveCategory === true && saveCategoryChecked === true) {
+				saveCategory(saveCategoryType, saveCategoryName, saveCategoryRate);	
+				}
+				
+				// preview uploaded icons and images
+				if (dataSubmitForm === 'graphics') {
+				$('.select_business img').attr('src', that.find('[name="custom_icon"]').val());
+				$('.sidebar_menu .logo').css('background', 'url("'+that.find('[name="custom_logo"]').val()+'") center center no-repeat');
+				$('.sidebar_menu .logo').css('background-size', 'contain');
+				}
+				
+				// update business name
+				if (dataSubmitForm === 'business_settings') {
+				$('[data-identifier="business_name"]').html(that.find('[name="business_name"]').val());
+				}
+											
+			} else {
+				
+				if (doReloadPageOnError) {
+				reloadPage(['show', 'error', translateError(data.message)]);
+				return false;	
+				}
+				
+				if (isPopup === true) {
+				popupInfo('show', 'error', translateError(data.message));
+				} else {
+				generalInfo('show', 'error', translateError(data.message));
+				}
+			}
+			
+		}
+
+	});	
+
+	
+});
+
+
+/* HIDE DYNAMIC PARENT */
+function hideDynamicParent(container, parentIdentifier) {
+    "use strict";
+	
+	container.closest(parentIdentifier).remove();
+	
+}
+
+
+/* ADD STATEMENT - FILE UPLOAD AJAX */
+function fileUpload(identification) {
+	"use strict";
+	
+	var buttonClasses;
+	var buttonText;
+	var statementActions;
+	
+	var DoRefreshDataTable;
+	var hideCloseItemOnComplete;
+	var hideProgessOnComplete;
+	var multipleFiles;
+	var showSuccessMessage;
+	var useTooltips;
+	var loadingAnimationInButton;
+	
+	var fileSizeLimit;
+	
+	var dnd;
+	var dndTarget;
+	
+	var previewImage;
+	
+	var uploadScript;
+	
+	// special use case ID if multiple different fileuploads are fired on same page
+	var useCase;
+						
+	switch (currentPage) {
+	
+	case 'files':
+	uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=file&file_upload=1';
+	buttonClasses = 'main_button ccfg_button_primary';
+	buttonText = 'Add File';
+	DoRefreshDataTable = true;
+	hideCloseItemOnComplete = true;
+	showSuccessMessage = true;
+	multipleFiles = true;
+	dnd = false;
+	previewImage = false;
+	fileSizeLimit = 25000;
+	break;
+	
+	case 'new_invoice':
+	case 'new_recinvoice':
+	case 'new_bill':
+	case 'new_recbill':
+	case 'new_estimate':
+	case 'edit_invoice':
+	case 'edit_recinvoice':
+	case 'edit_recbill':
+	uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=file&file_upload=1';
+	buttonClasses = 'attach_button extra uploadify first';
+	buttonText = '';
+	hideProgessOnComplete = true;
+	useTooltips = true;
+	multipleFiles = true;
+	dnd = false;
+	previewImage = false;
+	fileSizeLimit = 25000;
+	break;
+	
+	case 'graphics':
+	
+	if (portalName === 'eversign') {
+	uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=user_file&file_upload=1';
+	} else {
+	uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=file&file_upload=1';
+	}
+	
+	buttonClasses = 'button upload ccfg_button_secondary';
+	buttonText = 'Upload';
+	hideProgessOnComplete = true;
+	loadingAnimationInButton = true;
+	dnd = false;
+	previewImage = false;
+	fileSizeLimit = 25000;
+	break;
+	
+	/* EVERSIGN */
+
+	case 'new_document':
+	case 'edit_document':
+	case 'new_template':
+	case 'edit_template':
+	case 'use_template':
+	uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=file&file_upload=1';
+	useCase = 'document_settings';
+	buttonClasses = 'upload_document';
+	buttonText = 'Choose Files';
+	hideProgessOnComplete = true;
+	loadingAnimationInButton = true;
+	multipleFiles = true;
+	useTooltips = false;
+	dnd = true;
+	dndTarget = '#dnd';
+	previewImage = true;
+	fileSizeLimit = 100000;
+	break;
+	
+	case 'sign_document':
+	case 'prepare_document':
+	case 'prepare_template':
+		
+	if ($('body').find('.x_page form').attr('name') === 'add_signature_initials') {
+		uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=upload_signature_image&file_upload=1';
+		useCase = 'add_signature_initials';
+		buttonText = translateLanguage('Choose Image');
+		hideProgessOnComplete = true;
+		loadingAnimationInButton = true;
+		useTooltips = false;
+		dnd = true;
+		dndTarget = '#dnd';
+		fileSizeLimit = 25000;
+	} else {
+		
+		if (currentPage === 'sign_document') {
+		uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=signer_file&file_upload=1&additional_parameters={"document_hash":"'+$('body').find('[name="document_hash"]').val()+'","signer_hash":"'+$('body').find('[name="signer_hash"]').val()+'"}';
+		} else {
+		uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=signer_file&file_upload=1&additional_parameters={"document_hash":"'+currentID+'"}';
+		}
+		
+		useCase = 'sign_document_upload_attachments';
+		buttonText = translateLanguage('Choose Files');
+		multipleFiles = true;
+		hideProgessOnComplete = true;
+		loadingAnimationInButton = true;
+		dnd = true;
+		dndTarget = '#dnd';
+		fileSizeLimit = 25000;
+	}
+		
+	break;
+	
+	case 'dashboard':
+	case 'signatures':
+	case 'initials':
+		
+	if (portalName === 'eversign') {
+		uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=upload_signature_image&file_upload=1';
+		useCase = 'add_signature_initials';
+		buttonText = 'Choose Image';
+		hideProgessOnComplete = true;
+		loadingAnimationInButton = true;
+		useTooltips = false;
+		dnd = true;
+		dndTarget = '#dnd';
+		fileSizeLimit = 25000;
+	}
+	
+	break;
+	
+	/* EVERSIGN */
+	
+	default:
+	uploadScript = '/php/ajax_handler.php?action_type=create&endpoint=file&file_upload=1';
+	buttonClasses = 'attach_button extra uploadify first';
+	buttonText = '';
+	hideProgessOnComplete = true;
+	useTooltips = true;
+	multipleFiles = true;
+	dnd = false;
+	previewImage = false;
+	fileSizeLimit = 25000;
+	break;
+	
+	}
+	
+	// file type restrictions only for invoicely
+	var allowedFileTypes;
+	
+	if (portalName === 'invoicely') {
+	allowedFileTypes = ["image\/gif","image\/jpeg","image\/png","text\/plain","application\/pdf"];
+	} else {
+	allowedFileTypes = false;
+	}
+		
+    $('#' + identification).uploadifive({
+        'uploadScript' : uploadScript,
+		'buttonClass' : buttonClasses,
+		'multi' : multipleFiles === true ? true : false,
+		'dnd' : dnd === true ? true : false,
+		'dropTarget': dnd === true ? dndTarget : null,
+		'buttonText' : buttonText,
+		'fileSizeLimit' : fileSizeLimit,
+		'fileType'     : allowedFileTypes,
+		'onInit' : function() {
+			if (useTooltips === true) {
+			fireTiprPlugin();	
+			}
+		},
+		'onAddQueueItem' : function(file) {
+			// id of the uploadifive item being uploaded
+			// file.currentFileID exists here as well;
+			if (loadingAnimationInButton === true) {
+			$('label[for="'+$('#' + identification).attr('data-fileupload-id')+'"]').addClass('loading');
+			}
+			
+			if (currentPage === 'graphics') {
+			$('#' + identification).closest('.upload_branding').find('.remove').hide();
+			}
+			
+			if (useCase === 'add_signature_initials') {
+			$('section.upload_new .preview').removeClass('empty');
+			$('section.upload_new .preview span.empty').html('Converting ...');
+			}
+			
+			if (portalName === 'eversign' && (currentPage === 'new_document' || currentPage === 'edit_document')) {
+			fireSortablePlugin('eversign-multi-doc-upload');	
+			}
+			
+		},
+		'onCancel' : function() {
+			if (loadingAnimationInButton === true) {
+			$('label[for="'+$('#' + identification).attr('data-fileupload-id')+'"]').removeClass('loading');
+			}
+        },
+		'onError' : function(errorType) {
+			//console.log(errorType);
+			if (loadingAnimationInButton === true) {
+			$('label[for="'+$('#' + identification).attr('data-fileupload-id')+'"]').removeClass('loading');
+			}
+        },
+		'onUploadComplete' : function(file, data) {
+									
+			if (loadingAnimationInButton === true) {
+			$('label[for="'+$('#' + identification).attr('data-fileupload-id')+'"]').removeClass('loading');
+			}
+																						
+			data = $.parseJSON(data);
+			
+			//console.log(data);
+									
+			var fileID = data.message.file_id;
+			var fileURL = data.message.file_url;
+							
+			if (useCase === 'document_settings') {
+								
+				var previewImageURL = 'https://' + data.message.images[1];
+				
+				var documentContentArray = [];
+				
+				$.each(data.message.images, function(i) {
+					documentContentArray.push('https://' + data.message.images[i]);
+				});
+				
+			}
+								
+			if (fileID !== '') {
+			
+				if (DoRefreshDataTable === true) {
+					
+					var callBack = function() { 
+					$('table').find('[data-item-id="'+fileID+'"]').closest('tr').find('section.name span strong').html('<span class="new">NEW</span> ' + $('table').find('[data-item-id="'+fileID+'"]').closest('tr').find('section.name span strong').html());
+					};
+					
+					refreshDataTable(true, callBack);	
+					
+				}
+				
+				if (hideCloseItemOnComplete === true) {
+				$('.close_item').remove();
+				}
+				
+				if (showSuccessMessage === true) {
+				generalInfo('show', 'success', 'Your file has been uploaded.');
+				}
+				
+				if (hideProgessOnComplete === true) {
+				$('#' + identification).closest('form').find('#' + file.currentFileID + ' .progress').slideUp(250);
+				}
+				
+				if (currentPage === 'graphics') {
+				$('#' + identification).closest('.upload_branding').find('.remove').show();
+				$('#' + identification).closest('.upload_branding').find('img').attr('src', 'https://' + fileURL);
+				$('#' + identification).closest('.upload_branding').find('input[type="hidden"]').val('https://' + fileURL);
+				}
+				
+				if (useCase === 'add_signature_initials') {
+				
+				var imageURL = data.message.content;
+				
+				$('section.upload_new .preview span.empty').hide();
+	
+				$('[name="converted_image_url"]').val(imageURL);
+				$('section.upload_new .preview img').attr('src', imageURL);
+				
+				}
+				
+				if (previewImage === true) {
+				$('#' + identification).closest('form').find('#' + file.currentFileID).append('<img data-magnify="true" data-magnify-content=\''+documentContentArray+'\' src="'+previewImageURL+'" class="preview_image" draggable="false">');
+				}
+				
+				/*if (portalName === 'eversign' && currentPage === 'new_document') {
+				$('#' + identification).closest('form').find('#' + file.currentFileID).append('<a class="prepare" title="Fill Out & Sign Document" href="javasciprt:void(0)" data-popup="open" data-popup-id="eversign_editor">Prepare</a>');
+				}*/
+								
+				// add fileID and download URLs to file tags
+				//alert('add ID: '+ fileID +' to file ID: ' + currentFileID);
+				$('#' + identification).closest('form').find('#' + file.currentFileID).attr('data-file-id', fileID);
+				$('#' + identification).closest('form').find('#' + file.currentFileID + ' a.download_item').attr('href', 'https://' + fileURL);
+				
+			}
+			
+        }
+		
+        // http://www.uploadify.com/documentation/
+    });
+}							
+
+function fireUploadifivePlugin(singleID) {
+	"use strict";
+	if(singleID) {
+		fileUpload(singleID);
+	} else {
+		$('.fileupload').each(function() {
+			fileUpload($(this).attr('id'));
+		});
+	}
+}
+
+
+/* GENERATE RANDOM HASH */
+var rand = function() {
+    return Math.random().toString(36).substr(2); // remove `0.`
+};
+
+var token = function() {
+    return rand() + rand(); // to make it longer
+};
+
+
+/* AUTOCOMPLETE */
+function autocomplete(type) {
+	"use strict";
+
+	var action;
+	var autocompleteClass;
+	
+	var minChars = 0;
+	var doCalculation;
+
+	switch (type) {
+		
+		case 'item':
+		action = 'items';
+		autocompleteClass = 'item_autocomplete';
+		doCalculation = true;
+		break;
+
+		case 'expense':
+		action = 'expenses';
+		autocompleteClass = 'item_autocomplete';
+		doCalculation = true;
+		break;
+
+		case 'mileage':
+		action = 'trips';
+		autocompleteClass = 'item_autocomplete';
+		doCalculation = true;
+		break;
+
+		case 'time':
+		action = 'tasks';
+		autocompleteClass = 'item_autocomplete';
+		doCalculation = true;
+		break;
+		
+		case 'connection':
+		action = 'connections';		
+		autocompleteClass = 'connection_autocomplete';
+		break;
+		
+		/* EVERSIGN */
+		
+		case 'eversign_contacts_name':
+		action = 'eversign_contacts_name';		
+		autocompleteClass = 'contacts_autocomplete';
+		minChars = 1;
+		break;
+		
+		case 'eversign_contacts_email':
+		action = 'eversign_contacts_email';		
+		autocompleteClass = 'contacts_autocomplete';
+		minChars = 1;
+		break;
+		
+		default:
+		action = type;
+		
+	}
+	
+ 	$('body').find('[data-autocomplete="'+type+'"]').devbridgeAutocomplete({
+		
+		/* $(this) = input */
+	
+		serviceUrl: '/php/autocomplete_handler.php?action_type=' + action,
+		type: 'post',
+		maxHeight: 250,
+		minChars: minChars,
+		autoSelectFirst: false,
+		tabDisabled: true,
+		triggerSelectOnValidInput: false,
+		formatResult: function(suggestion){
+			/* format suggestions */
+												
+			var returnContent;
+			
+			returnContent = '<span class="left">' + suggestion.value+'</span>';
+			
+			if (action === 'items' || action === 'expenses' || action === 'trips' || action === 'tasks') {
+				
+				if (suggestion.rate) {
+				returnContent += '<span class="right">'+parseFloat(suggestion.rate).toFixed(2)+'</span>';
+				} else if (suggestion.price) {
+				returnContent += '<span class="right">'+parseFloat(suggestion.price).toFixed(2)+'</span>';
+				} else {
+				returnContent += '<span class="right">-&nbsp;</span>';
+				}
+								
+			} 
+						
+			return returnContent;
+			/* format suggestions */
+		},
+		
+		beforeRender: function(container) {		
+			/* actions before autocomplete loads */
+			container.addClass(autocompleteClass);
+			/* actions before autocomplete loads */
+		},
+		onSearchStart: function(){
+			$(this).parent().find('.input_loader').show();
+    	},
+    	onSearchComplete:function(){
+			$(this).parent().find('.input_loader').hide();
+    	},
+		onSelect: function (suggestions) {
+								
+			if (action === 'connections') {
+			/* CONNECTIONS 
+			var connectionName = suggestions.value;
+							
+			var appendContent; 
+			
+			appendContent = '<div class="autocomplete_card"><a class="close_icon"></a><p>';
+		
+			if ($(this).attr('data-autocomplete-use') !== 'track_connection' && $(this).attr('data-autocomplete-use') !== 'report_select_client') {
+		
+				appendContent += suggestions.address_html;
+		
+			} else {
+				
+				appendContent += connectionName;
+			
+			}
+
+			appendContent += '</p></div>';
+		
+			$(this).hide();
+			$(this).closest('[data-identifier="autocomplete_wrapper"]').find('input[name="client_id"]').val(suggestions.connection_id);
+			refreshStatementConnectionContacts(suggestions.connection_id);
+			
+			newOrEditClient();
+		
+			$(this).parent().append(appendContent);
+		
+			if ($(this).attr('data-autocomplete-use') !== 'track_connection' && $(this).attr('data-autocomplete-use') !== 'report_select_client') {
+					
+				if (suggestions.default_currency) {
+					$('[name="statement[currency]"]').val(suggestions.default_currency);
+					$('[name="statement[currency]"]').find('[value="'+(suggestions.default_currency).toLowerCase()+'"]').prop('selected', true);
+					refreshStatementCurrency();
+				}
+		
+				if (suggestions.default_language) {
+					$('[name="statement_language"]').val(suggestions.default_language);
+					$('[name="statement_language"]').find('[value="'+(suggestions.default_language).toLowerCase()+'"]').prop('selected', true);
+				}
+								
+			}
+
+			/* CONNECTIONS */
+			}
+			
+			if (action === 'items' || action === 'expenses' || action === 'trips' || action === 'tasks') {
+			/* ITEM EXPENSE TRIP TASK 
+			if (suggestions.description && $(this).attr('data-autocomplete-use') !== 'create_edit_track_entry') {
+			
+				$(this).val($(this).val() + ' - ' + suggestions.description);
+			
+			}
+		
+			if ($(this).attr('data-autocomplete-use') === 'create_edit_track_entry') {
+		
+				$(this).hide();
+				$(this).closest('.form_row').append('<div class="autocomplete_card"><a class="close_icon"></a><p>'+suggestions.value+'</p>');	
+		
+				$(this).closest('[data-identifier="autocomplete_wrapper"]').find('.radio_checkbox').closest('.form_row').hide();
+		
+				if (suggestions.rate) {
+					$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete-fill="rate"]').hide();
+					$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete-fill="rate"]').closest('.form_row').append('<div class="autocomplete_card"><p>'+suggestions.rate+'</p>');
+				}
+		
+			}
+		
+			if (type === 'time') {
+				$(this).closest('.one_item_line').find('[data-calculation="quantity"]').val('01:00');	
+				$(this).closest('.one_item_line').find('[data-calculation="quantity"]').attr('data-total-minutes', 60);	
+			} else {
+				$(this).closest('.one_item_line').find('[data-calculation="quantity"]').val('1');	
+			}
+		
+			if (suggestions.rate) {
+				$(this).closest('[data-parent-identifier="one_item_line"]').find('[data-autocomplete-fill="rate"]').val(parseFloat(suggestions.rate).toFixed(2));	
+			}
+		
+			if (suggestions.price) {
+				$(this).closest('[data-parent-identifier="one_item_line"]').find('[data-autocomplete-fill="rate"]').val(parseFloat(suggestions.price).toFixed(2));	
+			}
+		
+			if (suggestions.unit) {
+				$(this).closest('.one_item_line').find('.unit_lower select').hide();
+				$(this).closest('.one_item_line').find('.unit_lower .select_arrows').hide();
+				$(this).closest('.one_item_line').find('.unit_lower input').show();
+				$(this).closest('.one_item_line').find('.unit_lower input').val(suggestions.unit);
+			}
+			/* ITEM EXPENSE TRIP TASK */
+			}
+					
+			/* EVERSIGN */
+			
+			switch (action) {
+			
+				case 'connections':
+
+					var connectionName = suggestions.value;
+									
+					var appendContent; 
+					
+					appendContent = '<div class="autocomplete_card"><a class="close_icon"></a><p>';
+				
+					if ($(this).attr('data-autocomplete-use') !== 'track_connection' && $(this).attr('data-autocomplete-use') !== 'report_select_client') {
+				
+						appendContent += suggestions.address_html;
+				
+					} else {
+						
+						appendContent += connectionName;
+					
+					}
+		
+					appendContent += '</p></div>';
+				
+					$(this).hide();
+					$(this).closest('[data-identifier="autocomplete_wrapper"]').find('input[name="client_id"]').val(suggestions.connection_id);
+					refreshStatementConnectionContacts(suggestions.connection_id);
+					
+					newOrEditClient();
+				
+					$(this).parent().append(appendContent);
+				
+					if ($(this).attr('data-autocomplete-use') !== 'track_connection' && $(this).attr('data-autocomplete-use') !== 'report_select_client') {
+							
+						if (suggestions.default_currency) {
+							$('[name="statement[currency]"]').val(suggestions.default_currency);
+							$('[name="statement[currency]"]').find('[value="'+(suggestions.default_currency).toLowerCase()+'"]').prop('selected', true);
+							refreshStatementCurrency();
+						}
+				
+						if (suggestions.default_language) {
+							$('[name="statement_language"]').val(suggestions.default_language);
+							$('[name="statement_language"]').find('[value="'+(suggestions.default_language).toLowerCase()+'"]').prop('selected', true);
+						}
+										
+					}
+		
+				break;
+				
+				case 'items':
+				case 'expenses':
+				case 'trips':
+				case 'tasks':
+				
+					if (suggestions.description && $(this).attr('data-autocomplete-use') !== 'create_edit_track_entry') {
+					
+						$(this).val($(this).val() + ' - ' + suggestions.description);
+					
+					}
+				
+					if ($(this).attr('data-autocomplete-use') === 'create_edit_track_entry') {
+				
+						$(this).hide();
+						$(this).closest('.form_row').append('<div class="autocomplete_card"><a class="close_icon"></a><p>'+suggestions.value+'</p>');	
+				
+						$(this).closest('[data-identifier="autocomplete_wrapper"]').find('.radio_checkbox').closest('.form_row').hide();
+				
+						if (suggestions.rate) {
+							$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete-fill="rate"]').hide();
+							$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete-fill="rate"]').closest('.form_row').append('<div class="autocomplete_card"><p>'+suggestions.rate+'</p>');
+						}
+				
+					}
+				
+					if (type === 'time') {
+						$(this).closest('.one_item_line').find('[data-calculation="quantity"]').val('01:00');	
+						$(this).closest('.one_item_line').find('[data-calculation="quantity"]').attr('data-total-minutes', 60);	
+					} else {
+						$(this).closest('.one_item_line').find('[data-calculation="quantity"]').val('1');	
+					}
+				
+					if (suggestions.rate) {
+						$(this).closest('[data-parent-identifier="one_item_line"]').find('[data-autocomplete-fill="rate"]').val(parseFloat(suggestions.rate).toFixed(2));	
+					}
+				
+					if (suggestions.price) {
+						$(this).closest('[data-parent-identifier="one_item_line"]').find('[data-autocomplete-fill="rate"]').val(parseFloat(suggestions.price).toFixed(2));	
+					}
+				
+					if (suggestions.unit) {
+						$(this).closest('.one_item_line').find('.unit_lower select').hide();
+						$(this).closest('.one_item_line').find('.unit_lower .select_arrows').hide();
+						$(this).closest('.one_item_line').find('.unit_lower input').show();
+						$(this).closest('.one_item_line').find('.unit_lower input').val(suggestions.unit);
+					}
+				
+				break;
+			
+				/* EVERSIGN */
+			
+				case 'eversign_contacts_name':
+				case 'eversign_contacts_email':
+								
+					var thisFormRow = $(this).closest('.form_row');
+					
+					var name = suggestions.full_name;
+					var email = suggestions.email_address;
+					var language = suggestions.language;
+					
+					// if prefill contacts
+					if ($(this).closest('.inline').hasClass('prefill_context')) {
+															
+						if (action === 'eversign_contacts_name') {
+						thisFormRow.find('[name="prefill_email"]').val(email);
+						} else {
+						thisFormRow.find('[name="prefill_name"]').val(name);
+						}
+						
+					} else {
+												
+						if (action === 'eversign_contacts_name') {
+						thisFormRow.find('[name="signer_email"]').val(email);
+						} else {
+						thisFormRow.find('[name="signer_name"]').val(name);
+						}
+						
+					}
+										
+					if (language) {
+					
+						var oldLanguage = thisFormRow.find('[data-chosen-language]').attr('data-chosen-language');
+						
+						thisFormRow.find('[data-chosen-language]').attr('data-chosen-language', language);
+						thisFormRow.find('[data-chosen-language]').removeClass('lang_' + oldLanguage);
+						thisFormRow.find('[data-chosen-language]').addClass('lang_' + language);
+						
+					}
+									
+				break;
+								
+			}
+			
+			if (doCalculation === true) {
+				makeCalculation();
+			}
+		
+		}
+	
+	});
+
+	
+}
+/* UNIFIED AUTOCOMPLETE */
+
+
+/* AUTOCOMPLETE CALL */
+function fireAutocomplete(type) {
+	"use strict";
+		
+	$('body').find('[data-autocomplete="'+type+'"]').each(function() {
+		autocomplete($(this).attr('data-autocomplete'));
+	});
+	
+}
+/* AUTOCOMPLETE CALL */
+
+
+/* CLOSE AUTOCOMPLETE CARD */  
+$('body').on('click', '.autocomplete_card a.close_icon', function (){
+	"use strict";
+	
+	if ($(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete]').attr('data-autocomplete-use') === 'create_edit_track_entry') {
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete-fill="rate"]').show();
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('.radio_checkbox').closest('.form_row').show();
+	}
+
+	//$(this).autocomplete('enable');
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete]').autocomplete('clear');
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete]').show();
+	
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete]').val('');
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('[data-autocomplete-fill]').val('');
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('input[name="client_id"]').val('');
+	
+	$(this).closest('[data-identifier="autocomplete_wrapper"]').find('.autocomplete_card').remove();
+	
+	newOrEditClient();
+				
+});
+/* CLOSE AUTOCOMPLETE CARD */  
+
+
+/* SELECT ALL NONE */
+$('body').on('click', '[data-trigger="select-all-none"]', function () {
+	"use strict";
+	
+	if ($(this).attr('data-action') === 'select-all') {
+		$('[data-select-all-none="true"]').prop('checked', true);
+		$('[data-trigger="select-all-none"]').prop('checked', true);
+	} else if ($(this).attr('data-action') === 'select-none') {
+		$('[data-select-all-none="true"]').prop('checked', false);
+		$('[data-trigger="select-all-none"]').prop('checked', false);
+	} else {
+		$('[data-select-all-none="true"]').prop('checked', $(this).prop("checked"));
+	}
+	
+	markYellowChecked('tr');
+	updateSelectedStatementsCount();
+	updateCheckedItemsArray();
+
+});
+
+$('body').on('change', '[data-select-all-none="true"]', function() {
+	"use strict";
+	markYellowChecked('tr');
+	updateSelectedStatementsCount();
+	updateCheckedItemsArray();
+});
+
+function markYellowChecked(parentToMark) {
+	
+	$('body').find('[data-select-all-none="true"]').each(function() {
+	
+		if ($(this).prop('checked')) {
+		$(this).closest(parentToMark).addClass('selected');
+		} else {
+		$(this).closest(parentToMark).removeClass('selected');
+		}
+	
+	});
+	
+}
+
+function updateCheckedItemsArray() {
+	
+	var selectedItems = [];
+	
+	$('body').find('[data-select-all-none="true"]').each(function() {
+	
+		if ($(this).prop('checked')) {
+		selectedItems.push($(this).attr('data-item-id'));
+		} 
+	
+	});
+	
+	$('[name="selected_items"]').val(JSON.stringify(selectedItems));
+	
+	var hrefStatementIDs = selectedItems.toString();
+	
+	if (currentPage === 'invoices' || currentPage === 'estimates' || currentPage === 'bills') {
+	$('[data-action="insert_selected_items_array_href"]').attr('href', '/php/advanced_ajax_handler.php?&type=multi_statement_download&statement_ids='+hrefStatementIDs);
+	}
+	
+}
+
+/* COUNT SELECTED ITEMS */
+function countSelectedItems() {
+	
+	var count = 0;
+	
+	$('body').find('[data-select-all-none="true"]').each(function() {
+		if ($(this).prop('checked')) {
+		count ++;
+		} 
+	});
+		
+	return count;
+		
+}
+
+/* DESELECT ALL */
+function deselectAllSelectedItems() {
+	$('body').find('[data-select-all-none="true"]').prop('checked', false);
+	markYellowChecked('tr');
+	updateSelectedStatementsCount();
+	updateCheckedItemsArray();
+}
+
+
+/* SHOW SELECTED ITEMS */
+function updateSelectedStatementsCount() {
+	
+	var count = countSelectedItems();
+	
+	if (count > 0) {
+	$('[data-meta="default"]').addClass('hidden');	
+	$('[data-meta="custom"]').removeClass('hidden');	
+	$('[data-meta="custom"] .dynamic').html(count);	
+	$('#options-strip .button').addClass('active');
+	} else {
+	$('[data-meta="custom"]').addClass('hidden');	
+	$('[data-meta="default"]').removeClass('hidden');	
+	$('#options-strip .button').removeClass('active');
+	}
+	
+}
+
+
+/* COPY TO CLIPBOARD */
+$('body').on('click', '[data-clipboard="true"]', function() {
+	"use strict";
+	
+	var container = $(this);
+	
+	container.html('Copied');
+	
+	var linkToCopy = container.attr('data-link');
+	
+    var $temp = $("<input>");
+    $("body").append($temp);
+    $temp.val(linkToCopy).select();
+	
+    document.execCommand("copy");
+	
+    $temp.remove();
+	
+	setTimeout(function() {
+	container.html('Copy Link');
+    }, 1000);
+	
+});
+
+
+/* FUNCTION TO INSERT TEXT AT CARET */
+function insertAtCaret(areaId,text) {
+    var txtarea = document.getElementById(areaId);
+    var scrollPos = txtarea.scrollTop;
+    var strPos = 0;
+    var br = ((txtarea.selectionStart || txtarea.selectionStart == '0') ? 
+        "ff" : (document.selection ? "ie" : false ) );
+    if (br == "ie") { 
+        txtarea.focus();
+        var range = document.selection.createRange();
+        range.moveStart ('character', -txtarea.value.length);
+        strPos = range.text.length;
+    }
+    else if (br == "ff") strPos = txtarea.selectionStart;
+
+    var front = (txtarea.value).substring(0,strPos);  
+    var back = (txtarea.value).substring(strPos,txtarea.value.length); 
+    txtarea.value=front+text+back;
+    strPos = strPos + text.length;
+    if (br == "ie") { 
+        txtarea.focus();
+        var range = document.selection.createRange();
+        range.moveStart ('character', -txtarea.value.length);
+        range.moveStart ('character', strPos);
+        range.moveEnd ('character', 0);
+        range.select();
+    }
+    else if (br == "ff") {
+        txtarea.selectionStart = strPos;
+        txtarea.selectionEnd = strPos;
+        txtarea.focus();
+    }
+    txtarea.scrollTop = scrollPos;
+}
+
+/* EDITOR PLACEHOLDERS */
+$('body').on('click', '#desk.editor section.placeholders ul li', function() {
+	'use strict';
+	var textFill = '{{' + $(this).find('a').html() + '}}';
+	
+	insertAtCaret('editor_text',textFill);
+	
+});
+
+
+/* SET BRANDING COLORS */
+$('body').on('click', '[data-color-action]', function(event) {
+	'use strict';
+	event.preventDefault();
+	
+	var thisItem = $(this);
+	var HEXinput;
+	
+	var colorAction = thisItem.attr('data-color-action'); /* "apply" or "revert" */
+	var colorContext = thisItem.attr('data-context');
+	
+	// adjust object names to fit API 
+	var APIObjectName;
+
+	switch (colorContext) {
+		
+		case 'main_primary':
+		APIObjectName = 'primary_color';
+		break;
+		
+		case 'main_secondary':
+		APIObjectName = 'secondary_color';
+		break;
+		
+		case 'button_primary':
+		APIObjectName = 'primary_button_color';
+		break;
+		
+		case 'button_secondary':
+		APIObjectName = 'secondary_button_color';
+		break;
+		
+	}
+	
+	if (colorAction === 'revert') {
+		
+		HEXinput = thisItem.attr('data-default-color');
+		
+	} else {
+			
+		HEXinput = thisItem.closest('tr').find('input[name="hex_code"]').val();
+		var validHEX  = /^#[0-9A-F]{6}$/i.test('#' + HEXinput);
+	
+		if (!HEXinput || !validHEX) {
+		thisItem.closest('tr').find('input[name="hex_code"]').addClass('error');
+		return false;	
+		} else {
+		thisItem.closest('tr').find('input[name="hex_code"]').removeClass('error');
+		}
+	
+	}
+	
+	var postData;
+	
+	if (colorContext === 'main_primary') {
+	postData = {
+		primary_color: HEXinput,
+	};
+	} else if (colorContext === 'main_secondary') {
+	postData = {
+		secondary_color: HEXinput,
+	};
+	} else if (colorContext === 'button_primary') {
+	postData = {
+		primary_button_color: HEXinput,
+	};
+	} else if (colorContext === 'button_secondary') {
+	postData = {
+		secondary_button_color: HEXinput,
+	};
+	} 
+			
+	var postDataJSON = JSON.stringify(postData);
+	
+	$.ajax({	
+		type: "POST",
+		url: "/php/ajax_handler.php?endpoint=setting&action_type=edit",
+		data: ({ postArray: postDataJSON }),	
+		dataType: "json",	
+		error: function(XMLHttpRequest, textStatus, errorThrown) {
+     		//alert(textStatus + ', ' + errorThrown);
+  		},
+		success: function(){
+			//console.log(postDataJSON);
+			$('[name="ccfg_' + colorContext + '"]').val(HEXinput);
+			$('.ccfg_' + colorContext).css('background','#' + HEXinput);
+			thisItem.closest('tr').find('[data-refresh="hex_code"]').html('#' + HEXinput);
+			thisItem.closest('tr').find('[data-refresh="preview"]').css('background','#' + HEXinput);
+			
+			if (colorAction === 'revert') {
+			thisItem.closest('tr').find('input.jscolor').val(HEXinput);	
+			}
+			
+		}
+
+	});	
+	
+	
+});
+
+
+/* SWITCH PAYMENT METHOD CHECKOUT PAGE */
+$('body').on('change', '[data-switch-payment-method]', function() {
+	'use strict';
+	
+	var clickedPaymentMethod = $(this).attr('data-switch-payment-method');
+	
+	$(this).closest('.board').attr('data-payment-method', clickedPaymentMethod);
+	
+});
+
+
+/* CHANGE PAYMENT FREQUENCY CHECKOUT 
+$('body').on('change', '[name="payment_frequency"]', function() {
+	'use strict';
+	
+	var paymentFrequency = $(this).attr('id');
+	
+	alert('AJAX: Change invoice payment frequency to ' + paymentFrequency);
+	
+});
+*/
+
+/* OFFLINE AUTOCOMPLETE SUGGESTIONS */
+function openOfflineAutocomplete(container) {
+	'use strict';
+	
+	var suggestions = $(container).attr('data-offline-autocomplete-suggestions');
+	var autocompleteClass = $(container).attr('data-offline-autocomplete-class');
+	
+	if (suggestions && $(container).attr('data-offline-autocomplete-active') !== 'true') {
+	
+		var appendContent;
+		
+		appendContent = '<div class="offline_autocomplete '+autocompleteClass+'"><ul>';
+		
+		var splitSuggestions = suggestions.split(',');
+		
+		$.each(splitSuggestions, function(number) {
+		appendContent += '<li>'+splitSuggestions[number]+'</li>';
+		});
+			
+		appendContent += '</ul></div>';
+	
+		$(appendContent).insertAfter($(container));
+		
+		$(container).attr('data-offline-autocomplete-active', 'true');
+		
+	}
+}
+
+$('body').on('focus', 'input[data-offline-autocomplete="on"]', function() {
+	'use strict';
+	openOfflineAutocomplete($(this));
+});
+
+$('body').on('keyup', 'input[data-offline-autocomplete="on"]', function() {
+	'use strict';
+	openOfflineAutocomplete($(this));
+});
+
+function closeOfflineAutocomplete() {
+	'use strict';
+	$('.offline_autocomplete').remove();	
+	$('[data-offline-autocomplete-active="true"]').attr('data-offline-autocomplete-active', 'false');
+}
+
+$(document).click(function(e) {
+	'use strict';
+	var target = e.target;
+		
+    if (!$(target).is('input[data-offline-autocomplete="on"]')) {
+	closeOfflineAutocomplete();
+	}
+		
+});
+
+
+/* DROPDOWN NAVIGATION - should be merged with navigate dropdown functions */
+var offlineAutocompleteNavIndex = -1;
+
+$('html').on('keydown', 'body', function(event) {
+	"use strict";
+	
+	if ($('input[data-offline-autocomplete-active="true"]').length) {
+				
+		var autocompleteInput = $('input[data-offline-autocomplete-active="true"]');
+		var autocompleteMenu = $(autocompleteInput).next('.offline_autocomplete');
+							
+		if (event.keyCode === 40) {  
+			event.preventDefault();
+        	navigateOfflineAutocomplete(1, $(autocompleteInput));
+		}
+		
+    	if (event.keyCode === 38) {
+			event.preventDefault();
+			navigateOfflineAutocomplete(-1, $(autocompleteInput));
+    	}
+		
+    	if (event.keyCode === 13) {
+			event.preventDefault();
+			autocompleteMenu.find('li').eq(offlineAutocompleteNavIndex)[0].click();
+			closeOfflineAutocomplete();
+			$('input[data-offline-autocomplete="on"]').blur();
+		}
+		
+    	if (event.keyCode === 27) {
+			event.preventDefault();
+			closeOfflineAutocomplete();
+			$('input[data-offline-autocomplete="on"]').blur();
+		}
+	
+	}
+			  
+});
+                   
+function navigateOfflineAutocomplete(diff, autocompleteInput) {
+	"use strict";
+	
+	var autocompleteMenu = autocompleteInput.next('.offline_autocomplete');
+	var autocompleteMenuLinks = autocompleteMenu.find('li');
+		
+    offlineAutocompleteNavIndex += diff;
+		
+    if (offlineAutocompleteNavIndex >= autocompleteMenuLinks.length) {
+         offlineAutocompleteNavIndex = 0;
+	} 
+	
+    if (offlineAutocompleteNavIndex < 0) {
+         offlineAutocompleteNavIndex = autocompleteMenuLinks.length - 1;
+	}
+	
+    autocompleteMenuLinks.removeClass('selected').eq(offlineAutocompleteNavIndex).addClass('selected');
+}
+
+/* ADD EMAIL TO INPUT 
+TODO:
+- if only one email address make it email@address.com <email@address.com>	
+*/
+function addEmailToInput(inputContainer, passedValue) {
+	"use strict";
+	
+	var maxEmails = 10;
+	
+	//var wordCountRegex = /\s+/gi;
+		
+	var space = inputContainer.val() ? ', ' : '';
+	var inputValue = (inputContainer.val().replace('<', '').replace('>', '')) + space + passedValue;
+	
+	var containedValues = [];
+		
+	if (inputValue) {
+	
+		var separateElements = inputValue.split(',');
+		var formattedInputValue = '';
+	
+		$.each(separateElements, function(number) {
+	
+			var splitSeparateElement = separateElements[number].split(" ");
+			
+			// new count, UNUSED
+			//var newCountSplitSeparateElements = (separateElements[number].trim().replace(wordCountRegex, ' ').split(' ')).length;
+			//console.log('NEW count says: ' + newCountSplitSeparateElements);
+			
+			// old count
+			var countSplitSeparateElements = splitSeparateElement.length;
+			//console.log('OLD count says: ' + newCountSplitSeparateElements);
+			
+			var formattedSplitSeparateElement = '';
+			
+			$.each(splitSeparateElement, function(number) {
+			
+				//console.log(splitSeparateElement[number]);
+				
+				if (isValidEmailAddress(splitSeparateElement[number])) {
+
+					//if (newCountSplitSeparateElements === 1) {
+					//splitSeparateElement[number] = splitSeparateElement[number] + ' <'+ splitSeparateElement[number] + '>';
+					//} else {
+					splitSeparateElement[number] = '<'+ splitSeparateElement[number] + '>';
+					//}
+					
+				} 
+				
+				if (countSplitSeparateElements < 2) {
+				formattedSplitSeparateElement += splitSeparateElement[number];
+				} else {
+				formattedSplitSeparateElement += splitSeparateElement[number] + ' ';
+				}
+				
+				formattedSplitSeparateElement = formattedSplitSeparateElement.replace('  ', ' ').replace(' ,',',');
+				
+			});
+			
+			// check if already MAX email addresses specified
+			if (containedValues.length < 10) {
+				
+				//console.log('Max email limit not reached');
+			
+				// check if there are ANY valid emails in string
+				if (checkIfEmailInString(separateElements[number])) {
+				
+				//console.log('At least ONE valid email');
+				
+				var filteredEmailAddress = extractEmails(separateElements[number]).join(' ');
+				var numberOfEmailsContained = filteredEmailAddress.split(' ').length;
+				
+					// check if there is only ONE valid email contained
+					if (numberOfEmailsContained === 1) {
+					
+						//console.log('Only ONE valid email');
+						//console.log('filteredEmailAddress is ' + filteredEmailAddress);
+						//console.log('containedValues is ' + containedValues);
+						//console.log('inputValue is ' + inputValue);					
+
+						// check if this ONE contained email already exists in containedValues array
+						if ($.inArray(filteredEmailAddress, containedValues) == '-1') {
+						
+						//console.log('No Dupe! Searching for ' + filteredEmailAddress + ' in ' + containedValues);
+						
+						formattedInputValue	+= formattedSplitSeparateElement + ',';
+						formattedInputValue = formattedInputValue.replace('  ',' ').replace(' ,',',');
+					
+						// add to containedValues array
+						containedValues.push(filteredEmailAddress);
+											
+						} else {
+						//console.log('Dupe! Searching for ' + filteredEmailAddress + ' in ' + containedValues);
+						}
+					
+					} else {
+					//console.log('Error: More than ONE email');
+					}
+				
+				} else {
+				//console.log('Error: No valid email found in string');
+				}
+			
+			} else {
+			//console.log('Error: Max emails reached');	
+			}
+		
+		});
+		
+		$(inputContainer).val(formattedInputValue.replace('  ',' ').replace(' ,',','));
+		$(inputContainer).attr('data-contained-values', containedValues);
+	
+	}
+	
+}
+
+
+/* CALL ADD EMAIL FUNCTION ON BLUR */
+$('body').on('blur', 'section.editor.email input', function() {
+	'use strict';
+	
+	if (!$(clickedObject).parents().is('.offline_autocomplete')) {
+		addEmailToInput($(this), '');
+	}
+
+});
+
+
+/* EMPTY INPUT ON BLUR */
+$('body').on('blur', '[data-empty-on-blur]', function(event) {
+	'use strict';
+		
+	var string = $(this).attr('data-empty-on-blur');
+	
+	// FYI: variable "clickedObject" is global, defined at the top
+	if (!$(this).val() && !$(clickedObject).parents().is('.offline_autocomplete')) {
+	$(this).val(string);
+	}
+	
+});
+
+/* GRAPHICS - REMOVE ICON LOGO */
+$('body').on('click', '[data-action="remove_image"]', function() {
+	'use strict';
+	
+	var defaultImage = $(this).closest('.upload_branding').find('input[type="hidden"]').attr('data-default');
+	
+	$(this).closest('.upload_branding').find('img').attr('src', defaultImage);
+	
+	$(this).closest('.upload_branding').find('input[type="hidden"]').val(defaultImage);
+	$(this).hide();
+
+});
+
+/* SELECT TEXT ON ONE CLICK */
+function selectText(containerid) {
+    if (document.selection) {
+        var range = document.body.createTextRange();
+        range.moveToElementText(document.getElementById(containerid));
+        range.select();
+    } else if (window.getSelection) {
+        var range = document.createRange();
+        range.selectNode(document.getElementById(containerid));
+        window.getSelection().addRange(range);
+    }
+}
+
+
+/* CHECK IF INTERNET EXPLORER */
+function msieversion() {
+
+    var ua = window.navigator.userAgent;
+    var msie = ua.indexOf("MSIE ");
+
+    if (msie > 0 || !!navigator.userAgent.match(/Trident.*rv\:11\./))  // If Internet Explorer, return version number
+    {
+        return true;
+    }
+    else  // If another browser, return 0
+    {
+        return false;
+    }
+
+    return false;
+}
+
+
+$('body').on('click', '[data-action="mobile_menu"]', function() {
+	
+	openCloseMobileMenu();
+	
+});
+
+function openCloseMobileMenu(action) {
+	
+	if ($('.sidebar_menu').is(':visible') || action === 'close') {
+		$('html, body').css({
+    		'overflow': 'auto',
+    		'height': 'auto'
+		});
+		$('.sidebar_menu').fadeOut(50);
+	} else if (!$('.sidebar_menu').is(':visible') || action === 'open') {
+		$('html, body').css({
+    		'overflow': 'hidden',
+    		'height': '100%'
+		});
+		$('.sidebar_menu').fadeIn(50);
+	} else {
+		$('.sidebar_menu').fadeToggle(50);
+	}
+	
+
+}
+
+/* SORTABLE PLUGIN */
+function fireSortablePlugin(type) {
+	
+	var parentElement;
+	var dragHandle;
+	
+	var dataIDAttr;
+	
+	switch (type) {
+	
+		case 'eversign-multi-doc-upload':
+		parentElement = document.getElementById('uploadifive-upload_document-queue');
+		dragHandle = '.filename';
+		dataIDAttr = 'data-id';
+		break;
+		
+		default:
+		parentElement = document.getElementById('drag_item_list');
+		dragHandle = '.drag_item';
+		dataIDAttr = null;
+		break;
+		
+	}
+	
+	// if element does not exist, cancel 
+	if ($(parentElement).length < 1) {
+	return false;	
+	}
+	
+	var sortable = new Sortable(parentElement, {
+    	
+		//filter: ".form_row.add_signer",  // Selectors that do not lead to dragging (String or Function)
+    	//draggable: ".form_row",  // Specifies which items inside the element should be draggable
+		group: "name",
+    	store: null,
+    	animation: 150,
+    	handle: dragHandle,
+        dataIdAttr: dataIDAttr,
+    	ghostClass: 'ghost_drag_item',
+    	//chosenClass: 'chosen_drag_item',
+
+    	onEnd: function() {
+        	"use strict";
+        	// put order array into hidden form input - disabled for now
+        	//$('input[name="statement[item_order]"]').val(sortable.toArray());
+			
+			if (portalName === 'eversign' && (currentPage === 'new_document' || currentPage === 'edit_document' || currentPage === 'new_template' || currentPage === 'edit_template' || currentPage === 'use_template')) {
+			numberAscendingSignerOrder();	
+			}
+			
+    	},
+
+	});
+
+}
+
+
+/* HELP CENTRE POPUP FORM */
+$('body').on('change', '[name="contact_support"]', function() {
+	
+	if ($(this).prop('checked') == true) {
+		$(this).closest('.board').find('div.hidden').removeClass('hidden').show();
+		$(this).closest('section').remove();
+	}
+	
+});
+
+
+/* MARK CURRENT PAGE SIDEBAR */
+function markSidebarSelected(currentPageIdentifier) {
+	
+	$('.sidebar_menu ul').find('li[data-page-identifier]').removeClass();
+	$('.sidebar_menu ul').find('li[data-page-identifier="'+currentPageIdentifier+'"]').addClass('current');
+	
+}
+
+
+/* WINDOW UNLOAD ALERT CONFIRMATION */
+function bindBeforeUnload() {
+		
+	// for real page change actions, including tab-close or window-close 
+	$(window).bind('beforeunload', function(){
+				
+  		return 'Are you sure you want to leave this page? Changes you made may not be saved.'
+	
+	});
+
+}
+
+
+/* DISABLE WINDOW UNLOAD ALERT CONFIRMATION */
+function unbindBeforeUnload() {
+		
+	$(window).unbind('beforeunload');
+
+}
+
+
+/* CHECK IF TOUCH DEVICE */
+function isTouchDevice() {
+  return 'ontouchstart' in window        // works on most browsers 
+      || navigator.maxTouchPoints;       // works on IE10/11 and Surface
+};
+
+
+/* UNIVERSAL CLICK EVENT */
+var clickTouchEvent = (function() {
+if ('ontouchstart' in document === true)
+return 'touchstart';
+else
+return 'click';
+})();
